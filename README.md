@@ -164,43 +164,4 @@ After an interrupted desktop/web session, the app attempts to recover a matching
 <!-- Feature: portable JSON backup/restore provides a recovery copy outside the application's local storage. -->
 **Download backup** includes every story, chapter, scene, character, setting, note, research entry, activity item, passage task, style guide, review preference, target and release record. It downloads the current in-memory workspace even if local saving failed. **Import backup** validates a chosen JSON backup, previews its contents, and waits for **Restore workspace** before replacing the library. Backup files contain the current workspace, while retained historical versions stay in local storage. Keep backup files somewhere separate from the device when you need protection against device loss or cleared application data.
 
-## Verification
-
-```sh
-npm run verify
-```
-
-`verify` runs the TypeScript check, Node test suite, and web export. The tests cover editable DOCX content, EPUB ZIP/XML/navigation, Unicode and paragraph fidelity, legacy migration, interrupted-save recovery, failed-write retries, bounded checkpoints, deletion/restore recovery, and stale-window rejection using real IndexedDB transactions. `npm run test:pdf` separately generates a multilingual fixture and exercises the production Electron PDF renderer in a hidden window. Its intermediate output goes to `.local-checks/`.
-
-<!-- Feature: focused system regression checks exercise confirmed type changes, history links and continuity in isolated storage. -->
-After `npm run build:desktop`, run `node --experimental-strip-types scripts/system-consistency-validation.mjs` for the system consistency UI checks. Evidence goes to `audits/system-2026-10-13/`. For unattended desktop validation, set `NOVEL_DESKTOP_TEST_HIDDEN=1` before running the existing desktop validation command; it retains a separate test profile and the complete workload.
-
-<!-- Feature: visible desktop validation drives the real Electron window and retains evidence for each workflow. -->
-### Watch the desktop validation
-
-From this project directory, run:
-
-```powershell
-npm run test:desktop
-```
-
-This builds the desktop renderer, opens the real Electron window, and automatically clicks, fills fields, selects passages, and enters manuscript paragraphs at a watchable pace. Avoid interacting with its window while automation is running. It uses a fresh test profile under `.local-checks/desktop/<run>/profile`, so your usual desktop stories are not loaded or changed. The profile and all evidence are retained after the run.
-
-The scenario creates one story, four detailed character profiles covering Major/Minor/Side character groups, and five world-building entries covering Setting/History. It edits those profiles, creates ten chapters with exactly 2,500 words each (25,000 total), and assigns scene settings, cast and continuity notes. It checks proofreading corrections, prose analysis settings, dictionary/thesaurus responses and offline feedback, rich formatting/undo/redo, find/replace, passage tasks, linked scene outlines, character aliases, goals, release tracking, named checkpoints, and both previews. It exports the first chapter as PDF, EPUB, DOCX, HTML, Markdown and text, then reads the actual files to check the full body and chapter scope. Finally it downloads a full backup, closes and relaunches Electron to check all saved fields, cancels and confirms chapter deletion, verifies the pre-deletion checkpoint, and restores the deleted chapter through the backup import UI.
-
-Terminal output marks each check `PASS`, `FAIL`, or `BLOCKED` (a prerequisite failed). Failures do not prevent independent checks from running. A failure, blocked check, or interrupted run returns exit code `1`; complete success returns `0`. The printed run folder contains an incrementally updated `report.html`, `results.json` with errors and console logs, screenshots, Playwright traces, and exported files.
-
-```powershell
-npm run test:desktop -- --keep-open     # Inspect the test window after the run; Enter closes it
-npm run test:desktop -- --pause         # Press Enter before each check
-npm run test:desktop -- --fast          # Same workload, without demonstration delays
-npm run test:desktop -- --live-lookups  # Also validate the real online word providers
-npm run test:desktop:reuse -- --fast    # Reuse dist; rebuild first after any app changes
-```
-
-The desktop PDF save-dialog choice is automated so the run needs no manual file selection; the real preload bridge, IPC checks, PDF renderer and file write still execute. The default dictionary/thesaurus check uses controlled responses, then simulates provider failure. Use `--live-lookups` to additionally test external service availability. This validates the built Electron app, not the Windows installer or portable package, and is not a performance benchmark. Native save-dialog usability still needs a manual check.
-
-<!-- Feature: prepare only desktop builds with relative bundle URLs so file:// startup works offline. -->
-`npm run build:desktop` converts Expo's generated bundle links to relative paths for Electron's `file://` startup. `npm run desktop:preview` and `npm run test:desktop` use that build. `npm run build:web` remains the regular web export.
-
-See [DESIGN_CANVAS.md](./DESIGN_CANVAS.md) for the product direction and remaining decisions.
+ion and remaining decisions.
