@@ -163,5 +163,3 @@ After an interrupted desktop/web session, the app attempts to recover a matching
 
 <!-- Feature: portable JSON backup/restore provides a recovery copy outside the application's local storage. -->
 **Download backup** includes every story, chapter, scene, character, setting, note, research entry, activity item, passage task, style guide, review preference, target and release record. It downloads the current in-memory workspace even if local saving failed. **Import backup** validates a chosen JSON backup, previews its contents, and waits for **Restore workspace** before replacing the library. Backup files contain the current workspace, while retained historical versions stay in local storage. Keep backup files somewhere separate from the device when you need protection against device loss or cleared application data.
-
-ion and remaining decisions.
