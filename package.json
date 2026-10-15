@@ -1,0 +1,89 @@
+{
+  "name": "novel-writing-workspace",
+  "version": "0.1.0",
+  "description": "An offline-first desktop writing workspace for fiction authors.",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "npm run desktop",
+    "desktop": "concurrently -k -s first \"expo start --web --port 8081\" \"wait-on http://127.0.0.1:8081 && electron electron-main.cjs --dev\"",
+    "desktop:preview": "npm run build:desktop && electron electron-main.cjs",
+    "start:expo": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "test": "node --experimental-strip-types --test",
+    "test:pdf": "node --experimental-strip-types scripts/pdf-fixture.mjs && electron scripts/pdf-smoke.cjs",
+    "test:desktop": "npm run build:desktop && node scripts/desktop-validation.mjs",
+    "test:desktop:reuse": "node scripts/desktop-validation.mjs",
+    "typecheck": "tsc --noEmit",
+    "build:web": "expo export --platform web",
+    "build:desktop": "npm run build:web && node scripts/prepare-desktop-build.mjs",
+    "package:windows": "npm run build:desktop && electron-builder --win nsis",
+    "package:windows:portable": "npm run build:desktop && electron-builder --win portable",
+    "package:windows:dir": "npm run build:desktop && electron-builder --win dir",
+    "verify": "npm run typecheck && npm run test && npm run build:web"
+  },
+  "build": {
+    "appId": "com.littlebylittle.desktop",
+    "productName": "Little by Little",
+    "asar": true,
+    "npmRebuild": false,
+    "electronDist": "node_modules/electron/dist",
+    "extraMetadata": {
+      "main": "electron-main.cjs"
+    },
+    "directories": {
+      "app": ".desktop-package",
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron-main.cjs",
+      "electron-preload.cjs",
+      "electron-pdf.cjs",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "Little-by-Little-${version}-${arch}-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Little by Little"
+    },
+    "portable": {
+      "artifactName": "Little-by-Little-${version}-${arch}-Portable.${ext}"
+    }
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "~57.0.16",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "docx": "^9.9.0",
+    "expo": "~57.0.0",
+    "jszip": "^3.10.2",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-enriched-html": "^1.1.1",
+    "react-native-web": "^0.21.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.0",
+    "@types/react": "~19.2.0",
+    "@types/react-dom": "~19.2.0",
+    "concurrently": "^9.2.1",
+    "electron": "^42.0.0",
+    "electron-builder": "^26.15.3",
+    "fake-indexeddb": "^6.2.5",
+    "jsdom": "^29.1.1",
+    "pdfjs-dist": "^6.4.299",
+    "typescript": "~6.0.3",
+    "wait-on": "^8.0.4"
+  }
+}

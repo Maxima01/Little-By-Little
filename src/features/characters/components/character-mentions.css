@@ -1,0 +1,19 @@
+/* Feature: inline references, search choices and description previews inherit both workspace themes. */
+.character-mention-field { position: relative; min-width: 0; display: flex; flex-direction: column; gap: 7px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+.character-mention-label { color: var(--mention-ink); font-size: 13px; font-weight: 600; }
+.character-mention-editor { min-height: 92px; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--mention-border); border-radius: 8px; background: var(--mention-input); color: var(--mention-ink); font-family: inherit; font-size: 14px; line-height: 22px; white-space: pre-wrap; overflow-wrap: anywhere; cursor: text; }
+.character-mention-editor:empty::before { content: attr(data-placeholder); color: var(--mention-muted); pointer-events: none; }
+.character-mention-editor:focus-visible, .character-mention-chip:focus-visible, .character-mention-option:focus-visible, .character-mention-preview button:focus-visible { outline: 2px solid var(--mention-accent); outline-offset: 2px; }
+.character-mention-chip { display: inline; padding: 2px 5px; border-radius: 5px; background: var(--mention-tint); color: var(--mention-accent); font-weight: 600; cursor: pointer; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.character-mention-chip[data-missing="true"] { background: var(--mention-input); color: var(--mention-muted); text-decoration: underline dashed; }
+.character-mention-hint { font-size: 12px; line-height: 19px; color: var(--mention-muted); }
+.character-mention-picker { border: 1px solid var(--mention-border); border-radius: 9px; overflow: auto; max-height: 240px; background: var(--mention-paper); }
+.character-mention-option { display: flex; flex-direction: column; gap: 4px; width: 100%; min-height: 44px; text-align: left; background: transparent; color: var(--mention-ink); border: 0; border-bottom: 1px solid var(--mention-border); padding: 10px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+.character-mention-option[aria-selected="true"], .character-mention-option:hover { background: var(--mention-tint); }
+.character-mention-option-description { color: var(--mention-muted); font-size: 12px; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.character-mention-empty { padding: 12px; color: var(--mention-muted); font-size: 13px; line-height: 21px; }
+.character-mention-preview { position: fixed; z-index: 10000; box-sizing: border-box; max-height: 220px; overflow: auto; padding: 16px; border: 1px solid var(--mention-border); border-radius: 10px; background: var(--mention-paper); color: var(--mention-ink); box-shadow: 0 8px 24px rgba(18, 16, 21, 0.14); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 14px; }
+.character-mention-preview-header { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
+.character-mention-preview-header strong { overflow-wrap: anywhere; line-height: 22px; }
+.character-mention-preview button { border: 0; background: transparent; color: var(--mention-muted); min-width: 32px; min-height: 32px; cursor: pointer; font-size: 22px; }
+.character-mention-preview p { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 21px; margin: 8px 0 0; color: var(--mention-muted); }

@@ -1,0 +1,9 @@
+{
+  "expo": {
+    "name": "Novel Workspace",
+    "slug": "novel-writing-workspace",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic"
+  }
+}

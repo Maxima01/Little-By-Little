@@ -1,0 +1,69 @@
+.writer-rich-editor {
+  --writer-ink: #332f38;
+  --writer-muted: #625c6b;
+  --writer-accent: #67518f;
+  color: var(--writer-ink);
+  min-height: 560px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 16px;
+  line-height: 1.9;
+}
+
+.writer-rich-editor.dark {
+  --writer-ink: #f2eef5;
+  --writer-muted: #b5afbd;
+  --writer-accent: #c0afe9;
+}
+
+.writer-rich-editor p { margin: 0 0 1em; }
+.writer-rich-editor h1,
+.writer-rich-editor h2,
+.writer-rich-editor h3 {
+  color: var(--writer-ink);
+  line-height: 1.3;
+  margin: 1.2em 0 0.55em;
+}
+.writer-rich-editor h1 { font-size: 2em; }
+.writer-rich-editor h2 { font-size: 1.55em; }
+.writer-rich-editor h3 { font-size: 1.2em; }
+.writer-rich-editor ul,
+.writer-rich-editor ol { padding-left: 1.6em; margin: 0.5em 0 1em; }
+.writer-rich-editor blockquote {
+  border-left: 3px solid var(--writer-accent);
+  color: var(--writer-muted);
+  margin: 1.1em 0;
+  padding-left: 1em;
+}
+.writer-rich-editor a { color: var(--writer-accent); text-decoration: underline; }
+.writer-rich-editor:empty::before,
+.writer-rich-editor[data-empty='true']::before {
+  color: var(--writer-muted);
+  content: 'Begin your story here…';
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Feature: visible keyboard focus extends to navigation, inputs, formatting and dialog controls. */
+:is([role='button'], [role='tab'], [role='radio'], [role='checkbox'], input, textarea, select, [contenteditable='true']):focus-visible {
+  outline: 3px solid #67518f !important;
+  outline-offset: 3px;
+}
+@media (prefers-color-scheme: dark) {
+  :is([role='button'], [role='tab'], [role='radio'], [role='checkbox'], input, textarea, select, [contenteditable='true']):focus-visible {
+    outline-color: #c0afe9 !important;
+  }
+}
+[aria-disabled='true'] { cursor: default; }
+
+/* Feature: complete sanitized manuscript previews retain block spacing and inline writing styles. */
+.writer-preview-body { color: #302a36; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.writer-preview-body p { margin: 0 0 1em; }
+.writer-preview-body h1, .writer-preview-body h2, .writer-preview-body h3 { line-height: 1.3; margin: 1em 0 0.5em; }
+.writer-preview-body ul, .writer-preview-body ol { padding-left: 1.6em; }
+.writer-preview-body blockquote { border-left: 3px solid #67518f; color: #625c6b; margin: 1em 0; padding-left: 1em; }
+.writer-preview-body a { color: #67518f; text-decoration: underline; }
+.writer-preview-body pre { white-space: pre-wrap; }

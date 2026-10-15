@@ -1,0 +1,14 @@
+node_modules/
+.expo/
+dist/
+.desktop-package/
+release/
+*.log
+.local-checks/
+
+# Keep local project instructions, synced references, and review records private.
+/AGENTS.md
+/sources/
+/audits/
+/UX_IMPROVEMENT_PLAN.md
+/DESIGN_CANVAS.md
