@@ -2,6 +2,8 @@
 
 A desktop-first, offline-friendly story writing workspace. React Native and Expo keep the experience portable; Electron opens the desktop app, while the same project can run in a browser or on mobile.
 
+Currently in its Offline Version (Will add Cloud Saves and Synchronization in all three platforms)
+
 For contributors, [the source guide](./src/README.md) maps the entry points, feature folders, save pipeline, and platform-specific implementations.
 
 ## Start the desktop app
