@@ -84,7 +84,7 @@ export default function WritingToolbar({
   return (
     <>
       <View style={styles.toolbarFrame}>
-      <ScrollView horizontal showsHorizontalScrollIndicator keyboardShouldPersistTaps="always" onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)} onContentSizeChange={(width) => setContentWidth(width)} style={styles.toolbarScroll} contentContainerStyle={styles.toolbar}>
+      <ScrollView horizontal showsHorizontalScrollIndicator keyboardShouldPersistTaps="always" onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)} onContentSizeChange={(width) => setContentWidth(width)} style={[styles.toolbarScroll, { height: contentWidth > viewportWidth + 1 ? 80 : 66 }]} contentContainerStyle={styles.toolbar}>
         <View style={styles.toolGroup}>
           <PickerButton label="Text style" value={blockStyle} onPress={() => setOpenMenu('style')} styles={styles} />
           <PickerButton label="Font" value={fontFamily} onPress={() => setOpenMenu('font')} styles={styles} />
@@ -169,10 +169,10 @@ function AlignmentIcon({ alignment, active, styles }: { alignment: WritingAlignm
 
 function makeStyles(theme: Theme, desktop: boolean) {
   return StyleSheet.create({
-    toolbarFrame: { flexShrink: 0, width: '100%', maxWidth: 1120, alignSelf: 'center', paddingHorizontal: desktop ? 26 : 12, marginTop: 8 },
-    // Feature: reserve room for 44px controls, padding and a full-width desktop scrollbar.
-    toolbarScroll: { flexShrink: 0, height: 86, minHeight: 86, borderWidth: 1, borderColor: theme.border, borderRadius: 15, backgroundColor: theme.surface },
-    toolbar: { minHeight: 64, paddingVertical: 8, gap: desktop ? 13 : 9, paddingHorizontal: desktop ? 14 : 9, alignItems: 'center' },
+    toolbarFrame: { flexShrink: 0, width: '100%', maxWidth: 1120, alignSelf: 'center', paddingHorizontal: desktop ? 26 : 12, marginTop: 0 },
+    // Feature: compact formatting expands only when a horizontal scrollbar needs room beneath the 44px controls.
+    toolbarScroll: { flexShrink: 0, minHeight: 66, borderWidth: 1, borderColor: theme.border, borderRadius: 12, backgroundColor: theme.surface },
+    toolbar: { minHeight: 64, paddingVertical: 8, gap: desktop ? 8 : 6, paddingHorizontal: desktop ? 14 : 9, alignItems: 'center' },
     scrollHint: { fontSize: 12, lineHeight: 18, color: theme.muted, paddingTop: 4 },
     toolGroup: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     pickerButton: { height: 44, maxWidth: 180, minWidth: 58, paddingHorizontal: 10, borderWidth: 1, borderColor: theme.border, borderRadius: 9, backgroundColor: theme.background, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 7 },

@@ -9,6 +9,7 @@ import WritingToolbar, { type ToolbarAction } from './WritingToolbar';
 import ChapterContextPanel from './ChapterContextPanel';
 import ChapterPreview from './ChapterPreview';
 import WritingTools from './WritingTools';
+import { DEFAULT_WRITING_VIEW, WritingDeskControls, WritingDeskStatus } from './WritingDesk';
 import { manuscriptText } from '../lib/writingAnalysis';
 import { applyEditorTextEdit, editorTextSelection, selectEditorText, autoCapitalizeEditor } from '../lib/editorAssistance';
 import type { Chapter, ChapterScene, Story, WritingAlignment, WritingBlockStyle, WritingFontFamily, WritingPreferences } from '../../../domain/model';
@@ -22,6 +23,9 @@ type Props = {
   theme: Theme;
   desktop: boolean;
   saveState: string;
+  // Feature: focus mode hides workspace chrome while preserving the live editor and navigation preferences.
+  focusMode: boolean;
+  onFocusModeChange: (value: boolean) => void;
   // Feature: responsive context preferences belong to the workspace, surviving recovery and reload.
   contextBeside: boolean;
   contextOpen: boolean;
@@ -41,7 +45,7 @@ type Props = {
   onBack: () => void;
 };
 
-export default function RichEditor({ chapter, story, theme, desktop, saveState, contextBeside, contextOpen, onContextToggle, onExport, navigationControl, onSceneChange, onTitleChange, onSaveHtml, onTypographyChange, onPreferencesChange, onRevisionOpen, navigationRequest, onProsePreferences, onIgnoreProofreading, onBack }: Props) {
+export default function RichEditor({ chapter, story, theme, desktop, saveState, focusMode, onFocusModeChange, contextBeside, contextOpen, onContextToggle, onExport, navigationControl, onSceneChange, onTitleChange, onSaveHtml, onTypographyChange, onPreferencesChange, onRevisionOpen, navigationRequest, onProsePreferences, onIgnoreProofreading, onBack }: Props) {
   const contentRef = useRef<HTMLDivElement>(null);
   const selectionRef = useRef<Range | null>(null);
   const saveRef = useRef(onSaveHtml);
@@ -54,6 +58,12 @@ export default function RichEditor({ chapter, story, theme, desktop, saveState, 
   // Feature: context and writing tools have independent visibility for distraction-free drafting.
   const [toolsOpen, setToolsOpen] = useState(false);
   const [selectedWord, setSelectedWord] = useState('');
+  // Feature: view adjustments affect only this writing session, while selection counts follow the manuscript caret.
+  const [writingView, setWritingView] = useState(DEFAULT_WRITING_VIEW);
+  const [selectedWords, setSelectedWords] = useState(0);
+  const showContext = contextOpen && !focusMode;
+  const wordCount = countTextWords(bodyText);
+  const chapterNumber = story.chapters.findIndex((item) => item.id === chapter.id) + 1;
   const previousTextRef = useRef(manuscriptText(chapter.html));
   const correctingRef = useRef(false);
   const preferences = chapter.writingPreferences ?? { grammarSuggestions: true, autoCapitalizeI: false };
@@ -69,6 +79,7 @@ export default function RichEditor({ chapter, story, theme, desktop, saveState, 
       if (selection?.rangeCount && selection.anchorNode && contentRef.current?.contains(selection.anchorNode)) {
         selectionRef.current = selection.getRangeAt(0).cloneRange();
         const word = selection.toString().trim();
+        setSelectedWords(countTextWords(word));
         setSelectedWord(/^[a-z]+(?:['’-][a-z]+)*$/i.test(word) && word.length <= 64 ? word : '');
         setActiveFormats({
           bold: document.queryCommandState('bold'),
@@ -166,39 +177,64 @@ export default function RichEditor({ chapter, story, theme, desktop, saveState, 
     format(commands[action]);
   };
   const changeTitle = (value: string) => { setTitle(value); onTitleChange(value); };
+  // Feature: familiar find and focus shortcuts work without interrupting open dialogs or text composition.
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (event.isComposing || document.querySelector('[aria-modal="true"]')) return;
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f') {
+        event.preventDefault(); onRevisionOpen(captureSelection(), 'find');
+      }
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'f') {
+        event.preventDefault(); changeFocusMode(!focusMode);
+      }
+      if (event.key === 'Escape' && focusMode) { event.preventDefault(); changeFocusMode(false); }
+    };
+    document.addEventListener('keydown', handleShortcut);
+    return () => document.removeEventListener('keydown', handleShortcut);
+  }, [focusMode, onFocusModeChange, onRevisionOpen]);
+
+  // Feature: focus mode returns the caret to the manuscript so the writer can immediately keep typing.
+  const changeFocusMode = (value: boolean) => {
+    onFocusModeChange(value);
+    requestAnimationFrame(() => {
+      const editor = contentRef.current;
+      editor?.focus();
+      if (editor && selectionRef.current && editor.contains(selectionRef.current.startContainer)) {
+        const selection = window.getSelection(); selection?.removeAllRanges(); selection?.addRange(selectionRef.current);
+      }
+    });
+  };
 
   return (
     <View style={styles.root}>
       <View style={styles.topbar}>
-        {navigationControl}
+        {!focusMode && navigationControl}
         <Pressable accessibilityRole="button" onPress={onBack} style={styles.backButton}><Text style={styles.backText}>‹  Story</Text></Pressable>
         <View style={styles.topbarStory}>
-          <Text style={styles.eyebrow}>Chapter</Text>
+          <Text numberOfLines={1} style={styles.eyebrow}>{story.title} / Chapter {chapterNumber}</Text>
           <TextInput value={title} onChangeText={changeTitle} onBlur={() => onTitleChange(title.trim() || 'Untitled chapter')} style={styles.titleInput} accessibilityLabel="Chapter title" />
         </View>
         <View style={styles.topbarActions}>
+          <Pressable accessibilityLabel={focusMode ? 'Exit focus mode' : 'Enter focus mode'} accessibilityState={{ selected: focusMode }} onPress={() => changeFocusMode(!focusMode)} style={[styles.previewButton, focusMode && { backgroundColor: theme.accentSoft }]}><Text style={styles.previewButtonText}>{focusMode ? 'Exit focus' : 'Focus'}</Text></Pressable>
+          {!focusMode && <Pressable accessibilityLabel="Export manuscript" onPress={onExport} style={styles.previewButton}><Text style={styles.previewButtonText}>Export</Text></Pressable>}
           <Pressable accessibilityRole="button" onPress={() => setPreviewOpen(true)} style={styles.previewButton}><Text style={styles.previewButtonText}>Preview</Text></Pressable>
         </View>
       </View>
-      <View style={styles.assistanceBar}>
-        <Pressable accessibilityRole="button" accessibilityState={{ expanded: contextOpen }} onPress={onContextToggle} style={styles.previewButton}><Text style={styles.previewButtonText}>{contextOpen ? 'Hide context' : 'Show context'}</Text></Pressable>
-        <Pressable accessibilityRole="button" onPress={() => setToolsOpen(!toolsOpen)} style={styles.previewButton}><Text style={styles.previewButtonText}>Writing tools</Text></Pressable>
-        <Pressable accessibilityRole="button" onPress={() => onRevisionOpen(captureSelection())} style={styles.previewButton}><Text style={styles.previewButtonText}>Revision tools</Text></Pressable>
-        <Pressable accessibilityRole="button" onPress={onExport} style={styles.previewButton}><Text style={styles.previewButtonText}>Export</Text></Pressable>
-        {preferences.autoCapitalizeI && <Text style={styles.statusText}>Auto-capitalize I on</Text>}
-      </View>
-      <WritingToolbar
+      {!focusMode && <WritingDeskControls theme={theme} view={writingView} onView={setWritingView} contextOpen={showContext} onContext={onContextToggle} onTools={() => setToolsOpen(true)} onRevision={(tab) => onRevisionOpen(captureSelection(), tab)} />}
+      {!focusMode && writingView.formatting && <WritingToolbar
         theme={theme} desktop={desktop} blockStyle={blockStyle} fontFamily={fontFamily} fontSize={fontSize}
         alignment={alignment} activeFormats={activeFormats} enableHistory
         onBlockStyleChange={applyBlockStyle}
         onFontFamilyChange={(value) => onTypographyChange(value, fontSize)}
         onFontSizeChange={(value) => onTypographyChange(fontFamily, value)}
         onAlignmentChange={applyAlignment} onFormat={applyToolbarAction}
-      />
+      />}
       <ScrollView contentContainerStyle={styles.pageArea}>
-        <View style={[styles.documentWorkspace, { flexDirection: contextBeside ? 'row' : 'column' }]}>
-          <View style={[styles.paper, contextBeside && contextOpen && styles.paperBeside]}>
+        <View style={[styles.documentWorkspace, { flexDirection: contextBeside && showContext ? 'row' : 'column', maxWidth: contextBeside && showContext ? writingView.width + 330 : writingView.width }]}>
+          <View style={[styles.paper, { maxWidth: writingView.width }, contextBeside && showContext && styles.paperBeside]}>
           <TextInput value={title} onChangeText={changeTitle} onBlur={() => onTitleChange(title.trim() || 'Untitled chapter')} style={styles.pageTitle} placeholder="Chapter title" placeholderTextColor={theme.muted} accessibilityLabel="Manuscript chapter heading" />
+          {/* Feature: readable chapter metadata follows the manuscript heading without competing with it. */}
+          <Text style={styles.documentLabel}>Chapter {chapterNumber} · {chapter.releaseStatus ?? 'draft'}</Text>
           {!title.trim() && <Text style={styles.statusText}>Add a title, or leave this field to use “Untitled chapter”.</Text>}
           {createElement('div', {
             ref: contentRef,
@@ -211,21 +247,17 @@ export default function RichEditor({ chapter, story, theme, desktop, saveState, 
             // Feature: show a writing prompt even when the empty draft contains a blank paragraph.
             'data-empty': bodyText.trim() ? undefined : 'true',
             spellCheck: true,
-            style: { fontFamily, fontSize: fontSize + 'px' },
+            style: { fontFamily, fontSize: fontSize + 'px', lineHeight: writingView.spacing },
             onInput,
             onBlur: saveNow,
           })}
           </View>
-          {contextBeside && contextOpen && <ChapterContextPanel chapter={chapter} story={story} theme={theme} onChange={onSceneChange} onLocate={(start, end) => { if (!contextBeside && contextOpen) onContextToggle(); locatePassage(start, end); }} onOutline={() => { if (!contextBeside && contextOpen) onContextToggle(); onRevisionOpen(captureSelection(), 'outline'); }} />}
+          {contextBeside && showContext && <ChapterContextPanel chapter={chapter} story={story} theme={theme} onChange={onSceneChange} onLocate={(start, end) => { if (!contextBeside && contextOpen) onContextToggle(); locatePassage(start, end); }} onOutline={() => { if (!contextBeside && contextOpen) onContextToggle(); onRevisionOpen(captureSelection(), 'outline'); }} />}
         </View>
       </ScrollView>
-      <View style={styles.statusbar}>
-        <Text style={styles.statusText}>{countTextWords(bodyText)}{chapter.chapterGoal ? ` / ${chapter.chapterGoal}` : ''} words</Text>
-        <Text style={styles.statusText}>{bodyText.replace(/\s/g, '').length} characters</Text>
-        {desktop && <Text style={styles.statusHint}>Ctrl+B bold · Ctrl+I italic · Ctrl+Z undo</Text>}
-      </View>
+      <WritingDeskStatus theme={theme} words={wordCount} selectedWords={selectedWords} characters={bodyText.replace(/\s/g, '').length} goal={chapter.chapterGoal} saveState={saveState} onGoal={() => onRevisionOpen(undefined, 'targets')} />
       {/* Feature: narrow context opens beside the current task as a drawer, leaving the manuscript first. */}
-      <Modal accessibilityLabel="Chapter context" visible={!contextBeside && contextOpen} transparent animationType="fade" onRequestClose={onContextToggle}>
+      <Modal accessibilityLabel="Chapter context" visible={!contextBeside && showContext} transparent animationType="fade" onRequestClose={onContextToggle}>
         <View style={styles.contextOverlay}><View style={styles.contextDrawer}>
           <View style={styles.contextHeader}><Text style={styles.contextTitle}>Chapter context</Text><Pressable accessibilityRole="button" accessibilityLabel="Close chapter context" onPress={onContextToggle} style={styles.previewButton}><Text style={styles.previewButtonText}>Close</Text></Pressable></View>
           <ScrollView keyboardShouldPersistTaps="handled"><ChapterContextPanel inDrawer chapter={chapter} story={story} theme={theme} onChange={onSceneChange} onLocate={(start, end) => { if (!contextBeside && contextOpen) onContextToggle(); locatePassage(start, end); }} onOutline={() => { if (!contextBeside && contextOpen) onContextToggle(); onRevisionOpen(captureSelection(), 'outline'); }} /></ScrollView>
@@ -240,23 +272,24 @@ export default function RichEditor({ chapter, story, theme, desktop, saveState, 
 // Fits the document canvas and keeps optional assistance controls usable on narrow screens.
 function makeStyles(theme: Theme, desktop: boolean) {
   return StyleSheet.create({
+    documentLabel: { color: theme.muted, fontSize: 13, marginBottom: 24 },
     root: { flex: 1, minHeight: 0, backgroundColor: theme.background },
-    topbar: { minHeight: 64, flexShrink: 0, marginHorizontal: desktop ? 18 : 9, marginTop: desktop ? 14 : 8, paddingHorizontal: desktop ? 18 : 14, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 18, flexDirection: 'row', alignItems: 'center', gap: 8, shadowColor: '#332F38', shadowOpacity: 0.04, shadowOffset: { width: 0, height: 2 }, shadowRadius: 8, elevation: 1 },
+    topbar: { flexWrap: 'wrap', paddingVertical: 8, minHeight: 64, flexShrink: 0, marginHorizontal: desktop ? 18 : 9, marginTop: desktop ? 10 : 8, paddingHorizontal: desktop ? 18 : 14, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
     backButton: { minHeight: 44, justifyContent: 'center', paddingVertical: 9, paddingHorizontal: 8 }, backText: { color: theme.accent, fontSize: 14, fontWeight: '700' },
-    topbarStory: { flex: 1, minWidth: 0 }, eyebrow: { color: theme.muted, fontSize: 12, letterSpacing: 1.2, fontWeight: '800' },
+    topbarStory: { flex: 1, minWidth: 90 }, eyebrow: { color: theme.muted, fontSize: 12 },
     titleInput: { color: theme.text, fontSize: 15, fontWeight: '700', padding: 0, marginTop: 3 },
     saveBadge: { flexDirection: 'row', gap: 7, alignItems: 'center' }, saveDot: { height: 7, width: 7, borderRadius: 4, backgroundColor: theme.secondary }, saveText: { color: theme.muted, fontSize: 14 },
-    topbarActions: { flexDirection: 'row', alignItems: 'center', gap: 12 }, previewButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: theme.border }, previewButtonText: { color: theme.accent, fontSize: 14, fontWeight: '700' },
+    topbarActions: { flexDirection: 'row', alignItems: 'center', gap: 6 }, previewButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: theme.border }, previewButtonText: { color: theme.accent, fontSize: 14, fontWeight: '700' },
     pageArea: { flexGrow: 1, alignItems: 'center', padding: desktop ? 26 : 12, paddingBottom: 40 },
     assistanceBar: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingHorizontal: desktop ? 26 : 12, paddingTop: 10 },
     documentWorkspace: { width: '100%', maxWidth: 1120, alignSelf: 'center', gap: 16 },
-    paper: { width: '100%', maxWidth: 790, minHeight: desktop ? 760 : 580, paddingHorizontal: desktop ? 88 : 24, paddingTop: desktop ? 40 : 24, paddingBottom: 70, backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1, borderRadius: desktop ? 4 : 12, boxShadow: desktop ? '0 4px 22px rgba(32, 24, 46, 0.05)' : undefined },
+    paper: { width: '100%', maxWidth: 790, minHeight: desktop ? 760 : 580, paddingHorizontal: desktop ? 64 : 24, paddingTop: desktop ? 48 : 28, paddingBottom: 70, backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1, borderRadius: 12 },
     contextOverlay: { flex: 1, padding: 12, backgroundColor: 'rgba(18,16,21,0.34)', alignItems: 'flex-end', justifyContent: 'center' },
     contextDrawer: { width: '100%', maxWidth: 420, maxHeight: '92%', padding: 12, borderRadius: 16, backgroundColor: theme.surface, gap: 10 },
     contextHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
     contextTitle: { color: theme.text, fontSize: 18, fontWeight: '700' },
     paperBeside: { flex: 1, minWidth: 0, width: 'auto' },
-    pageTitle: { fontSize: desktop ? 30 : 24, fontWeight: '700', color: theme.text, marginBottom: 24, padding: 0 },
+    pageTitle: { fontFamily: 'Georgia', fontSize: desktop ? 34 : 26, fontWeight: '700', color: theme.text, marginBottom: 8, padding: 0 },
     statusbar: { minHeight: 40, flexShrink: 0, flexWrap: 'wrap', backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 17 }, statusText: { color: theme.muted, fontSize: 12 }, statusHint: { color: theme.muted, fontSize: 12, marginLeft: 'auto' },
   });
 }

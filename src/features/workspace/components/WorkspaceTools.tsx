@@ -8,6 +8,7 @@ import type { ChapterRecoveryRequest } from '../../editor/lib/chapterRecovery';
 import { listWorkspaceVersions } from '../lib/storage';
 import type { SavedVersion } from '../lib/saveHistory';
 import type { Theme } from '../../../theme/theme';
+import AutomaticBackups from './AutomaticBackups';
 
 type Props = { theme: Theme; workspace: Workspace | null; saveState: string; lastSavedAt: string | null; onSave: () => Promise<unknown>; onRestore: (workspace: Workspace) => Promise<void>; onRecoverChapter: (request: ChapterRecoveryRequest) => Promise<void> };
 
@@ -20,9 +21,9 @@ export default function WorkspaceTools({ theme, workspace, saveState, lastSavedA
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
-  // Feature: small windows group recovery and backup commands in a labeled workspace disclosure.
+  // Feature: one workspace disclosure keeps backup administration out of the writing area at every width.
   const { width } = useWindowDimensions();
-  const compact = width < 1280;
+  const compact = width < 600;
   const [menuOpen, setMenuOpen] = useState(false);
   // Feature: comparisons are scoped to a saved chapter instead of requiring whole-workspace restoration.
   const [comparison, setComparison] = useState<{ chapter: Chapter; storyId: string; storyTitle: string } | null>(null);
@@ -48,18 +49,21 @@ export default function WorkspaceTools({ theme, workspace, saveState, lastSavedA
   };
   return <>
     <View style={styles.bar}>
-      <View style={[styles.status, width < 600 && { width: '100%' }]}><Text accessibilityLiveRegion="polite" style={styles.statusText}>{saveState}</Text>{lastSavedAt && <Text style={styles.detail}>Last saved {new Date(lastSavedAt).toLocaleTimeString()}</Text>}</View>
+      <View style={styles.status}><Text accessibilityLiveRegion="polite" style={styles.statusText}>{saveState}</Text>{lastSavedAt && !compact && <Text style={styles.detail}>Last saved {new Date(lastSavedAt).toLocaleTimeString()}</Text>}</View>
       <View style={styles.actions}>
-        <Pressable accessibilityRole="button" accessibilityHint="Saves immediately and creates a version you can restore" disabled={!workspace || busy} onPress={() => { void run(async () => { await onSave(); setNotice('Manual checkpoint saved.'); }); }} style={styles.button}><Text style={styles.buttonText}>Save now</Text></Pressable>
-        {compact && <Pressable accessibilityRole="button" accessibilityLabel="Workspace backups and history" accessibilityState={{ expanded: menuOpen }} onPress={() => setMenuOpen(!menuOpen)} style={styles.button}><Text style={styles.buttonText}>Workspace {menuOpen ? '⌃' : '⌄'}</Text></Pressable>}
+        {!compact && <Pressable accessibilityRole="button" accessibilityHint="Saves immediately and creates a version you can restore" disabled={!workspace || busy} onPress={() => { void run(async () => { await onSave(); setNotice('Manual checkpoint saved.'); }); }} style={styles.button}><Text style={styles.buttonText}>Save now</Text></Pressable>}
+        <Pressable accessibilityRole="button" accessibilityLabel="Workspace backups and history" accessibilityState={{ expanded: menuOpen }} onPress={() => setMenuOpen(!menuOpen)} style={[styles.button, menuOpen && { backgroundColor: theme.accentSoft }]}><Text style={styles.buttonText}>Workspace {menuOpen ? '⌃' : '⌄'}</Text></Pressable>
       </View>
-      {(!compact || menuOpen) && <View style={[styles.actions, compact && { width: '100%' }]}>
+      {menuOpen && <View style={[styles.actions, { width: '100%' }]}>
+        {compact && <Pressable accessibilityHint="Saves immediately and creates a version you can restore" disabled={!workspace || busy} onPress={() => { void run(async () => { await onSave(); setNotice('Manual checkpoint saved.'); }); }} style={styles.button}><Text style={styles.buttonText}>Save now</Text></Pressable>}
         <Pressable accessibilityRole="button" disabled={busy} onPress={showHistory} style={styles.button}><Text style={styles.buttonText}>Version history</Text></Pressable>
         <Pressable accessibilityRole="button" disabled={!workspace || busy} onPress={() => { if (workspace) void run(async () => { await downloadWorkspaceBackup(workspace); setNotice('Workspace backup download started.'); }); }} style={styles.button}><Text style={styles.buttonText}>Download backup</Text></Pressable>
         <Pressable accessibilityRole="button" disabled={busy} onPress={importBackup} style={styles.button}><Text style={styles.buttonText}>Import backup</Text></Pressable>
       </View>
       }
     </View>
+    {/* Feature: external backup status remains accessible even when local loading or saving fails. */}
+    <AutomaticBackups theme={theme} workspace={workspace} detailsVisible={menuOpen} />
     {!open && (error || notice) ? <View style={styles.noticeRow}><Text accessibilityRole={error ? 'alert' : undefined} accessibilityLiveRegion="polite" style={[styles.message, { flex: 1 }]}>{error || notice}</Text>{!!notice && !error && <Pressable accessibilityRole="button" accessibilityLabel="Dismiss workspace notice" onPress={() => setNotice('')} style={styles.button}><Text style={styles.buttonText}>Dismiss</Text></Pressable>}</View> : null}
     <Modal accessibilityLabel="Workspace version history and recovery" visible={open} transparent animationType="fade" onRequestClose={() => { if (!busy) setOpen(false); }}>
       <View style={styles.overlay}><View style={[styles.modal, comparison && { maxWidth: 1040 }]}>
@@ -96,7 +100,7 @@ function makeStyles(theme: Theme) {
   return StyleSheet.create({
     noticeRow: { flexDirection: 'row', flexShrink: 0, alignItems: 'center', gap: 8, paddingRight: 12, backgroundColor: theme.accentSoft },
     bar: { flexShrink: 0, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 },
-    status: { flexShrink: 1, gap: 3 }, statusText: { color: theme.text, fontSize: 12 }, detail: { color: theme.muted, fontSize: 12, lineHeight: 19 },
+    status: { flex: 1, minWidth: 0, gap: 3 }, statusText: { color: theme.text, fontSize: 13 }, detail: { color: theme.muted, fontSize: 12, lineHeight: 19 },
     actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
     button: { minHeight: 44, justifyContent: 'center', borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 }, buttonText: { color: theme.accent, fontSize: 14, fontWeight: '600' },
     primary: { backgroundColor: theme.accent, borderRadius: 8, paddingHorizontal: 15, paddingVertical: 10 }, primaryText: { color: theme.mode === 'dark' ? '#201B2A' : '#fff', fontSize: 14, fontWeight: '700' },

@@ -42,6 +42,7 @@
       "electron-main.cjs",
       "electron-preload.cjs",
       "electron-pdf.cjs",
+      "electron-backup.cjs",
       "package.json"
     ],
     "win": {

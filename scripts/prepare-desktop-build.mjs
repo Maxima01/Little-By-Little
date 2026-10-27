@@ -15,7 +15,7 @@ const sourcePackage = JSON.parse(await readFile(new URL('../package.json', impor
 await rm(staging, { recursive: true, force: true });
 await mkdir(staging, { recursive: true });
 await cp(new URL('../dist/', import.meta.url), new URL('../.desktop-package/dist/', import.meta.url), { recursive: true });
-for (const runtimeFile of ['electron-main.cjs', 'electron-preload.cjs', 'electron-pdf.cjs']) {
+for (const runtimeFile of ['electron-main.cjs', 'electron-preload.cjs', 'electron-pdf.cjs', 'electron-backup.cjs']) {
   await copyFile(`${root}${runtimeFile}`, `${staging}${runtimeFile}`);
 }
 const stagedPackage = {

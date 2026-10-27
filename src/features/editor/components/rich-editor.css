@@ -59,6 +59,18 @@
 }
 [aria-disabled='true'] { cursor: default; }
 
+/* Feature: restrained hover feedback and palette-matched selection keep the desktop writing surface coherent. */
+@media (hover: hover) {
+  [role='button']:not([aria-disabled='true']):hover { filter: brightness(0.96); }
+}
+::selection { background: #eae3f5; color: #332f38; }
+input, textarea, [contenteditable='true'] { caret-color: #67518f; }
+@media (prefers-color-scheme: dark) {
+  ::selection { background: #39334a; color: #f2eef5; }
+  input, textarea, [contenteditable='true'] { caret-color: #c0afe9; }
+  [role='button']:not([aria-disabled='true']):hover { filter: brightness(1.12); }
+}
+
 /* Feature: complete sanitized manuscript previews retain block spacing and inline writing styles. */
 .writer-preview-body { color: #302a36; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
 .writer-preview-body p { margin: 0 0 1em; }

@@ -6,12 +6,14 @@ import { loadWorkspace, replaceWorkspace, stageWorkspace, writeWorkspace } from 
 import { recoverChapterInWorkspace, type ChapterRecoveryRequest } from '../../editor/lib/chapterRecovery';
 import { replaceStoryMatches, type SearchMatch } from '../../editor/lib/manuscriptOperations';
 import { appendStoryActivity } from '../../../domain/model';
+import { backupWorkspace } from '../lib/externalBackup';
 
 // Coordinates in-memory edits, crash-draft staging, durable commits, checkpoints, and recovery notices.
 // workspaceRef is the latest edit; revisionRef prevents an older completed save from clearing newer dirty state.
 export function useWorkspaceSave() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const workspaceRef = useRef<Workspace | null>(null);
+  const lastCommittedRef = useRef<Workspace | null>(null);
   const revisionRef = useRef(0);
   const dirtyRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -40,6 +42,7 @@ export function useWorkspaceSave() {
     setSaveState('Saving…');
     try {
       const result = await writeWorkspace(current, options);
+      lastCommittedRef.current = current;
       if (mountedRef.current && revision === revisionRef.current) {
         dirtyRef.current = false;
         setLastSavedAt(result.savedAt);
@@ -78,6 +81,7 @@ export function useWorkspaceSave() {
       const loaded = await loadWorkspace();
       if (!mountedRef.current) return;
       workspaceRef.current = loaded.workspace;
+      lastCommittedRef.current = loaded.workspace;
       setWorkspace(loaded.workspace);
       setLastSavedAt(loaded.savedAt);
       setRecoveryMessage(loaded.recoveryMessage);
@@ -99,6 +103,7 @@ export function useWorkspaceSave() {
     const result = await replaceWorkspace(restored, previous ?? undefined);
     revisionRef.current += 1;
     workspaceRef.current = restored;
+    lastCommittedRef.current = restored;
     setWorkspace(restored);
     dirtyRef.current = false;
     setSaveError('');
@@ -173,6 +178,16 @@ export function useWorkspaceSave() {
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [saveNow]);
+
+  // Feature: retry a disconnected backup destination every minute using only the last successfully saved workspace.
+  // Keep uncommitted edits out of background retries; Back up now can explicitly protect those drafts.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const committed = lastCommittedRef.current;
+      if (committed) void backupWorkspace(committed);
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, []);
 
   return { workspace, workspaceRef, persist, saveNow, restore, recoverChapter, replaceMatches, saveState, saveError, loadError, recoveryMessage, lastSavedAt, retryLoad, dismissRecovery: () => setRecoveryMessage('') };
 }

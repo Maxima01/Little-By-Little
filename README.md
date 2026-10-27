@@ -6,6 +6,9 @@ Currently in its Offline Version (Will add Cloud Saves and Synchronization in al
 
 For contributors, [the source guide](./src/README.md) maps the entry points, feature folders, save pipeline, and platform-specific implementations.
 
+<!-- Feature: a focused interface refinement keeps writing and chapters ahead of workspace administration. -->
+The story hub puts chapters before reference collections. **Workspace** expands save checkpoints, version history, downloads, imports, and automatic backup settings; local save status and external backup failures stay visible when collapsed. The editor keeps Export with Focus and Preview at every width, uses readable chapter metadata, and keeps view preferences scrollable on short windows. Shared controls provide pressed, disabled, hover, and keyboard-focus feedback.
+
 ## Start the desktop app
 
 Install Node.js 22.13 or newer, then run from this directory:
@@ -30,7 +33,7 @@ npm run desktop:preview # Build the web renderer and open it in Electron
 ## Create a standalone Windows executable
 
 <!-- Feature: package the complete offline renderer and Electron runtime as a Windows installer or portable executable. -->
-The packaged desktop app does not require Node.js, Expo, a browser, the web application, or an internet connection to launch. Its story library remains in Electron's local application-data profile across normal closes, restarts, and installed upgrades. Uninstalling or manually clearing the application's data can remove that library, so keep using **Download backup** for irreplaceable manuscripts.
+The packaged desktop app does not require Node.js, Expo, a browser, the web application, or an internet connection to launch. Its story library remains in Electron's local application-data profile across normal closes, restarts, and installed upgrades. Uninstalling or manually clearing the application's data can remove that library. The desktop app now keeps automatic external backups in **Documents/Little by Little Backups** by default; use **Automatic backups** to choose another destination.
 
 Create a Windows installer:
 
@@ -57,7 +60,7 @@ Packaging creates `.desktop-package/` and `release/`; both are ignored by Git. `
 - Chapter creation and a rich-text writing workspace with headings, emphasis, lists, quotes, undo/redo, spellcheck, word count, and automatic local saving.
 - Story sections for characters, world building, art, notes, and research.
 - PDF, EPUB, Word (.docx), Markdown, plain text, and HTML manuscript exports.
-- Recoverable version history, manual checkpoints, and downloadable workspace backup/restore.
+- Recoverable version history, manual checkpoints, downloadable workspace backup/restore, and automatic desktop backups outside application storage.
 - Chapter cast counts, name mentions, scene setting continuity, and optional writing assistance.
 - Saved/current chapter comparisons and recovery of individual drafts or passages.
 - Light and dark palettes that follow the operating system; the light palette uses soft pastels.
@@ -165,3 +168,19 @@ After an interrupted desktop/web session, the app attempts to recover a matching
 
 <!-- Feature: portable JSON backup/restore provides a recovery copy outside the application's local storage. -->
 **Download backup** includes every story, chapter, scene, character, setting, note, research entry, activity item, passage task, style guide, review preference, target and release record. It downloads the current in-memory workspace even if local saving failed. **Import backup** validates a chosen JSON backup, previews its contents, and waits for **Restore workspace** before replacing the library. Backup files contain the current workspace, while retained historical versions stay in local storage. Keep backup files somewhere separate from the device when you need protection against device loss or cleared application data.
+
+<!-- Feature: consistent navigation exposes every story section across desktop and compact windows. -->
+Navigation: select a story in the sidebar to reach **Chapters**, **Characters**, **World Building**, **Art**, **Notes**, and **Research** directly. The current section or chapter is highlighted. On smaller screens, **Show navigation** opens the same destinations in a drawer; selecting a destination, **Close navigation**, or Escape dismisses it. The bottom **Write** shortcut resumes the story's last opened chapter. Story panels stack when the sidebar leaves limited space, and creation dialogs scroll while keeping Create and Cancel visible.
+
+For a focused navigation check, run `npm run build:web`, serve `dist` on `http://127.0.0.1:8093`, then run `node scripts/navigation-smoke.mjs`. It uses a temporary, isolated headless Edge session and saves screenshots under `.local-checks/navigation/`.
+
+<!-- Feature: automatic desktop backups protect local persistence with independent JSON files and visible recovery controls. -->
+## Automatic external backups
+
+The desktop app enables automatic backups by default in **Documents/Little by Little Backups**, outside its application-data profile. Every successful local save updates **little-by-little-latest.json**. The app retains up to **30 dated copies**, captured about every five minutes of changes and at explicit checkpoints or workspace restores. Complete temporary files are flushed before replacement; a failed write preserves the existing latest copy. Files use the same portable JSON format as Download backup and include the full workspace, while local version history remains in application storage.
+
+Open **Automatic backups** below the workspace toolbar to see the folder, last completed backup and any failure. **Choose folder** selects a parent folder on an external drive or in a cloud-synced directory; the app uses a Little by Little Backups subfolder. **Back up now** also preserves a dated copy of the open workspace, even if its local save failed. **Pause backups** leaves existing files intact, and **Resume backups** immediately copies the open workspace. Browser and native mobile sessions retain their existing file-export limitations; automatic folder backups run in Electron.
+
+If the destination is unavailable, local saves continue. The app retries the last successfully committed workspace every minute while open and on later saves. A normal desktop quit waits for backup writes already in progress. For device-loss protection, select an external drive or a cloud-synced folder; the default Documents folder alone is still on this computer, and cloud upload is handled by the writer's sync application.
+
+To recover, choose **Open folder**, then **Import backup**, select the latest JSON file or a dated copy, review it and choose **Restore workspace**. If local storage is empty and a surviving or previously configured backup is detected, the app shows recovery guidance instead of replacing the external copy with a starter workspace. Changing folders does not delete backups from the old destination. Backup preferences are specific to this installation and are not included in portable workspace files.

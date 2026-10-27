@@ -1,5 +1,5 @@
 import Pressable from '../components/AccessiblePressable';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useColorScheme, useWindowDimensions } from 'react-native';
 import {
@@ -66,7 +66,6 @@ export default function App() {
   const { width } = useWindowDimensions();
   const desktop = width >= 900;
   const theme = scheme === 'dark' ? darkTheme : lightTheme;
-  const styles = makeStyles(theme, desktop);
   const { workspace, workspaceRef, persist, saveNow, restore, recoverChapter, replaceMatches, saveState, saveError, loadError, recoveryMessage, lastSavedAt, retryLoad, dismissRecovery } = useWorkspaceSave();
   // Feature: one revision workspace shares the captured passage and navigates back to real manuscript text.
   const [revisionOpen, setRevisionOpen] = useState(false);
@@ -85,6 +84,16 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('library');
   // Let desktop writers tuck the floating story navigator away for a wider drafting area.
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Feature: small screens expose the same story and section navigator in a dismissible drawer.
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  useEffect(() => { if (desktop) setNavigationOpen(false); }, [desktop]);
+  // Feature: focus mode hides navigation only while drafting and restores the writer's existing sidebar preference.
+  const [writingFocus, setWritingFocus] = useState(false);
+  const focusMode = screen === 'editor' && writingFocus;
+  // Feature: story panels stack when the open navigator leaves too little room for side-by-side content.
+  const spaciousContent = width - (desktop && sidebarOpen && !focusMode ? 278 : 0) >= 900;
+  const styles = makeStyles(theme, desktop, spaciousContent);
+  useEffect(() => { if (screen !== 'editor') setWritingFocus(false); }, [screen]);
   const [activeStoryId, setActiveStoryId] = useState<string | null>(null);
   const [activeChapterId, setActiveChapterId] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<SectionKey>('chapters');
@@ -96,7 +105,7 @@ export default function App() {
   const [formContent, setFormContent] = useState('');
   const [formCategory, setFormCategory] = useState<EntryCategory>('Reference');
   // Places the navigation toggle inside the aligned workspace header.
-  const navigationControl = desktop ? <Pressable accessibilityRole="button" accessibilityLabel={sidebarOpen ? 'Hide navigation' : 'Show navigation'} onPress={() => setSidebarOpen(!sidebarOpen)} style={styles.sidebarToggle}><Text style={styles.sidebarToggleText}>{sidebarOpen ? '‹' : '☰'}</Text></Pressable> : undefined;
+  const navigationControl = <Pressable accessibilityRole="button" accessibilityLabel={desktop && sidebarOpen ? 'Hide navigation' : 'Show navigation'} accessibilityState={{ expanded: desktop ? sidebarOpen : navigationOpen }} onPress={() => desktop ? setSidebarOpen(!sidebarOpen) : setNavigationOpen(true)} style={styles.sidebarToggle}><Text style={styles.sidebarToggleText}>{desktop && sidebarOpen ? '‹' : '☰'}</Text></Pressable>;
 
   const updateStory = useCallback((storyId: string, updater: (story: Story) => Story, options?: SaveOptions) => {
     const current = workspaceRef.current;
@@ -122,6 +131,7 @@ export default function App() {
     : null;
 
   const openStory = (story: Story) => {
+    setNavigationOpen(false);
     setActiveStoryId(story.id);
     setActiveChapterId(null);
     setActiveEntryId(null);
@@ -129,6 +139,7 @@ export default function App() {
   };
 
   const openChapter = (story: Story, chapter: Chapter) => {
+    setNavigationOpen(false);
     const current = workspaceRef.current;
     if (current) {
       const next = rememberChapter(current, story.id, chapter.id);
@@ -142,6 +153,7 @@ export default function App() {
 
   const openSection = (section: SectionKey) => {
     if (!activeStory) return;
+    setNavigationOpen(false);
     setActiveSection(section);
     setActiveEntryId(null);
     setScreen('collection');
@@ -153,6 +165,7 @@ export default function App() {
   };
 
   const startDialog = (nextDialog: DialogState, defaultTitle = '', defaultContent = '') => {
+    setNavigationOpen(false);
     setFormError('');
     setFormTitle(defaultTitle);
     setFormContent(defaultContent);
@@ -283,13 +296,18 @@ export default function App() {
   };
   const workspaceTools = <WorkspaceTools theme={theme} workspace={workspace} saveState={saveState} lastSavedAt={lastSavedAt} onSave={() => saveNow({ checkpoint: 'Manual checkpoint' })} onRestore={restoreAndNavigate} onRecoverChapter={async (request) => { try { await recoverChapter(request); } finally { setEditorRevision((value) => value + 1); } }} />;
   // Feature: context uses available canvas width and persists explicit choices across editor remounts.
-  const contextBeside = width - (desktop && sidebarOpen ? 278 : 0) >= 1040;
+  const contextBeside = width - (desktop && sidebarOpen && !focusMode ? 278 : 0) >= 1040;
   const contextKey = contextBeside ? 'wide' : 'narrow';
   const contextOpen = workspace?.contextVisibility?.[contextKey] ?? contextBeside;
   const toggleContext = () => {
     const current = workspaceRef.current;
     if (current) persist({ ...current, contextVisibility: { ...current.contextVisibility, [contextKey]: !contextOpen } });
   };
+
+  // Feature: library navigation closes the drawer while retaining the story for an explicit return.
+  const openLibrary = () => { setNavigationOpen(false); setScreen('library'); };
+  // Feature: reuse one navigator so desktop and compact layouts expose identical destinations.
+  const navigator = <Sidebar theme={theme} styles={styles} stories={stories} activeStoryId={activeStoryId} activeChapterId={activeChapterId} activeSection={activeSection} screen={screen} onNewStory={createNewStory} onLibrary={openLibrary} onOpenStory={openStory} onOpenChapter={openChapter} onOpenSection={openSection} onAddChapter={createNewChapter} />;
 
   if (!workspace) {
     return <View style={{ flex: 1, backgroundColor: theme.background }}>{workspaceTools}<View style={styles.loading}>{!loadError && <ActivityIndicator color={theme.accent} />}<Text style={styles.mutedText}>{loadError || saveState}</Text>{!!loadError && <Pressable accessibilityRole="button" onPress={() => { void retryLoad(); }} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>Try loading again</Text></Pressable>}</View></View>;
@@ -298,24 +316,9 @@ export default function App() {
   return (
     <View style={styles.shell}>
       <StatusBar barStyle={theme.mode === 'dark' ? 'light-content' : 'dark-content'} />
-      {desktop && sidebarOpen && (
-        <Sidebar
-          theme={theme}
-          styles={styles}
-          stories={stories}
-          activeStoryId={activeStoryId}
-          activeChapterId={activeChapterId}
-          screen={screen}
-          saveState={saveState}
-          onNewStory={createNewStory}
-          onLibrary={() => setScreen('library')}
-          onOpenStory={openStory}
-          onOpenChapter={openChapter}
-          onAddChapter={createNewChapter}
-        />
-      )}
+      {desktop && sidebarOpen && !focusMode && navigator}
       <View style={styles.main}>
-        {workspaceTools}
+        {!focusMode && workspaceTools}
         {saveError ? <Text accessibilityRole="alert" style={styles.recoveryNotice}>{saveError}</Text> : null}
         {recoveryMessage ? <Pressable accessibilityRole="button" accessibilityLabel="Dismiss recovery notice" onPress={dismissRecovery} style={styles.recoveryNotice}><Text style={styles.mutedText}>{recoveryMessage} · Dismiss</Text></Pressable> : null}
         {screen === 'library' && (
@@ -327,8 +330,8 @@ export default function App() {
         )}
         {screen === 'story' && activeStory && (
           <StoryScreen
-            theme={theme} styles={styles} story={activeStory} saveState={saveState} navigationControl={navigationControl} desktop={desktop}
-            onBack={() => setScreen('library')}
+            theme={theme} styles={styles} story={activeStory} saveState={saveState} navigationControl={navigationControl} desktop={spaciousContent}
+            onBack={openLibrary}
             onTitleChange={(title) => updateStory(activeStory.id, (story) => ({ ...story, title }))}
             onDescriptionChange={(description) => updateStory(activeStory.id, (story) => ({ ...story, description }))}
             onOpenSection={openSection}
@@ -364,6 +367,8 @@ export default function App() {
         {screen === 'editor' && activeStory && activeChapter && (
           <RichEditor
             key={`${activeChapter.id}-${editorRevision}`}
+            focusMode={focusMode}
+            onFocusModeChange={setWritingFocus}
             chapter={activeChapter}
             saveState={saveState}
             story={activeStory}
@@ -397,8 +402,14 @@ export default function App() {
             }))}
           />
         )}
-        {!desktop && <MobileNavigation screen={screen} notesActive={activeSection === 'notes' && (screen === 'collection' || screen === 'entry')} theme={theme} styles={styles} onLibrary={() => setScreen('library')} onStory={activeStory ? () => setScreen('story') : undefined} onNotes={activeStory ? () => openSection('notes') : undefined} />}
+        {!desktop && !focusMode && <MobileNavigation screen={screen} notesActive={activeSection === 'notes' && (screen === 'collection' || screen === 'entry')} theme={theme} styles={styles} onLibrary={openLibrary} onStory={activeStory ? () => setScreen('story') : undefined} onWrite={activeStory ? () => { const chapter = resumeChapter(activeStory); if (chapter) openChapter(activeStory, chapter); else createNewChapter(); } : undefined} onNotes={activeStory ? () => openSection('notes') : undefined} />}
       </View>
+      {!desktop && <Modal accessibilityLabel="Story navigation" visible={navigationOpen} transparent animationType="none" onRequestClose={() => setNavigationOpen(false)}>
+        <View style={styles.navigationBackdrop}><View style={styles.navigationDrawer}>
+          <Pressable accessibilityLabel="Close navigation" onPress={() => setNavigationOpen(false)} style={styles.navigationClose}><Text style={styles.secondaryButtonText}>Close navigation ×</Text></Pressable>
+          {navigator}
+        </View></View>
+      </Modal>}
       {exportStoryId && stories.find((story) => story.id === exportStoryId) && <ExportDialog story={stories.find((story) => story.id === exportStoryId)!} currentChapterId={activeStoryId === exportStoryId ? activeChapterId ?? undefined : undefined} theme={theme} onClose={() => setExportStoryId(null)} />}
       {activeStory && <RevisionTools key={activeStory.id} visible={revisionOpen} initialTab={revisionTab} openToken={revisionToken} theme={theme} workspace={workspace} story={activeStory} chapter={activeChapter ?? resumeChapter(activeStory)} selection={revisionSelection}
         onClose={() => setRevisionOpen(false)}
@@ -433,9 +444,10 @@ export default function App() {
   );
 }
 
-function Sidebar({ theme, styles, stories, activeStoryId, activeChapterId, screen, saveState, onNewStory, onLibrary, onOpenStory, onOpenChapter, onAddChapter }: {
-  theme: Theme; styles: ReturnType<typeof makeStyles>; stories: Story[]; activeStoryId: string | null; activeChapterId: string | null; screen: Screen; saveState: string;
-  onNewStory: () => void; onLibrary: () => void; onOpenStory: (story: Story) => void; onOpenChapter: (story: Story, chapter: Chapter) => void; onAddChapter: () => void;
+// Feature: section shortcuts and accurate selected states keep the current location visible across layouts.
+function Sidebar({ theme, styles, stories, activeStoryId, activeChapterId, activeSection, screen, onNewStory, onLibrary, onOpenStory, onOpenChapter, onOpenSection, onAddChapter }: {
+  theme: Theme; styles: ReturnType<typeof makeStyles>; stories: Story[]; activeStoryId: string | null; activeChapterId: string | null; activeSection: SectionKey; screen: Screen;
+  onNewStory: () => void; onLibrary: () => void; onOpenStory: (story: Story) => void; onOpenChapter: (story: Story, chapter: Chapter) => void; onOpenSection: (section: SectionKey) => void; onAddChapter: () => void;
 }) {
   return (
     <View style={styles.sidebar}>
@@ -449,18 +461,19 @@ function Sidebar({ theme, styles, stories, activeStoryId, activeChapterId, scree
       <Text style={[styles.navHeading, styles.projectsHeading]}>Your stories</Text>
       <ScrollView style={styles.storyNavList}>
         {stories.map((story) => {
-          const selected = story.id === activeStoryId;
+          const selected = story.id === activeStoryId && screen !== 'library';
           return (
             <View key={story.id}>
-              <Pressable accessibilityRole="button" onPress={() => onOpenStory(story)} style={[styles.storyNavRow, selected && styles.storyNavRowActive]}>
+              <Pressable accessibilityRole="button" accessibilityLabel={story.title || 'Untitled story'} accessibilityState={{ selected: selected && screen === 'story' }} onPress={() => onOpenStory(story)} style={[styles.storyNavRow, selected && styles.storyNavRowActive]}>
                 <View style={[styles.projectDot, { backgroundColor: selected ? theme.peach : theme.secondary }]} />
-                <Text numberOfLines={1} style={[styles.storyNavTitle, selected && styles.storyNavTitleActive]}>{story.title}</Text>
+                <Text numberOfLines={1} style={[styles.storyNavTitle, selected && styles.storyNavTitleActive]}>{story.title || 'Untitled story'}</Text>
               </Pressable>
               {selected && <View style={styles.chapterNavGroup}>
-                <Pressable accessibilityRole="button" onPress={() => onOpenStory(story)} style={styles.storyMenuLink}><Text style={styles.storyMenuText}>Story menu</Text></Pressable>
+                {(['chapters', ...COLLECTION_SECTIONS] as SectionKey[]).map((section) => <NavRow key={section} label={SECTION_INFO[section].title} icon={SECTION_INFO[section].icon} active={activeSection === section && (screen === 'collection' || screen === 'entry')} onPress={() => onOpenSection(section)} styles={styles} />)}
+                <Text style={styles.chapterNavHeading}>Manuscript</Text>
                 {story.chapters.map((chapter, index) => (
-                  <Pressable key={chapter.id} accessibilityRole="button" onPress={() => onOpenChapter(story, chapter)} style={styles.chapterNavRow}>
-                    <Text style={[styles.chapterNavText, chapter.id === activeChapterId && styles.chapterNavTextActive]} numberOfLines={1}>{index + 1}. {chapter.title}</Text>
+                  <Pressable key={chapter.id} accessibilityRole="button" accessibilityLabel={`${index + 1}. ${chapter.title}`} accessibilityState={{ selected: screen === 'editor' && chapter.id === activeChapterId }} onPress={() => onOpenChapter(story, chapter)} style={[styles.chapterNavRow, screen === 'editor' && chapter.id === activeChapterId && styles.navRowActive]}>
+                    <Text style={[styles.chapterNavText, screen === 'editor' && chapter.id === activeChapterId && styles.chapterNavTextActive]} numberOfLines={1}>{index + 1}. {chapter.title}</Text>
                   </Pressable>
                 ))}
                 <Pressable accessibilityRole="button" onPress={onAddChapter} style={styles.addChapterLink}><Text style={styles.addChapterText}>＋  Add a chapter</Text></Pressable>
@@ -472,14 +485,13 @@ function Sidebar({ theme, styles, stories, activeStoryId, activeChapterId, scree
       <View style={styles.sidebarFooter}>
         <View style={styles.avatar}><Text style={styles.avatarText}>A</Text></View>
         <View style={styles.profileCopy}><Text style={styles.profileName}>Your workspace</Text><Text style={styles.profileStatus}>Local writing & backups</Text></View>
-        <Text style={styles.settingsIcon}>⌘</Text>
       </View>
     </View>
   );
 }
 
 function NavRow({ label, icon, active, onPress, styles }: { label: string; icon: string; active: boolean; onPress: () => void; styles: ReturnType<typeof makeStyles> }) {
-  return <Pressable accessibilityRole="button" onPress={onPress} style={[styles.navRow, active && styles.navRowActive]}><Text style={[styles.navIcon, active && styles.navIconActive]}>{icon}</Text><Text style={[styles.navLabel, active && styles.navLabelActive]}>{label}</Text></Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: active }} onPress={onPress} style={[styles.navRow, active && styles.navRowActive]}><Text style={[styles.navIcon, active && styles.navIconActive]}>{icon}</Text><Text style={[styles.navLabel, active && styles.navLabelActive]}>{label}</Text></Pressable>;
 }
 
 function LibraryScreen({ theme, styles, stories, saveState, navigationControl, onNewStory, onOpenStory, onOpenChapter, onDeleteStory }: {
@@ -491,7 +503,7 @@ function LibraryScreen({ theme, styles, stories, saveState, navigationControl, o
       <TopBar title="My stories" subtitle="A calm place for every draft" saveState={saveState} navigationControl={navigationControl} styles={styles} theme={theme} actionLabel="＋ New story" onAction={onNewStory} />
       <ScrollView contentContainerStyle={styles.libraryContent}>
         <View style={styles.welcomePanel}>
-          <View style={styles.welcomeCopy}><Text style={styles.welcomeTitle}>Make room for what comes next.</Text><Text style={styles.welcomeSub}>Drafts save automatically on this device. Download a backup from Workspace to keep a copy elsewhere.</Text></View>
+          <View style={styles.welcomeCopy}><Text style={styles.welcomeTitle}>Make room for what comes next.</Text><Text style={styles.welcomeSub}>Drafts save automatically on this device. Open Automatic backups to manage external copies in the desktop app.</Text></View>
           <Pressable accessibilityRole="button" onPress={onNewStory} style={styles.primaryButton}><Text style={styles.primaryButtonText}>Start my story</Text></Pressable>
         </View>
         <SectionHeading title="Your stories" caption={`${stories.length} ${stories.length === 1 ? 'story' : 'stories'}`} styles={styles} />
@@ -543,19 +555,7 @@ function StoryScreen({ theme, styles, story, saveState, navigationControl, deskt
           </View>
           <View style={{ gap: 6, flexShrink: 1 }}><Pressable accessibilityRole="button" onPress={() => startChapter ? onOpenChapter(story, startChapter) : onNewChapter()} style={styles.continueButton}><Text style={styles.continueButtonText}>{startChapter ? 'Continue writing' : 'Create first chapter'}</Text></Pressable>{startChapter && <Text style={styles.chapterMeta}>{startChapter.title}</Text>}</View>
         </View>
-        {/* Feature: project tools are accessible before choosing a chapter. */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}><Pressable accessibilityRole="button" onPress={() => onProjectTools('style')} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>Project style guide</Text></Pressable><Pressable accessibilityRole="button" onPress={() => onProjectTools('targets')} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>Targets & release buffer</Text></Pressable></View>
-        <SectionHeading title="Explore this story" caption="Choose what you want to work on" styles={styles} />
-        <View style={styles.categoryGrid}>
-          {sections.map((section) => {
-            const info = SECTION_INFO[section];
-            const total = section === 'chapters' ? story.chapters.length : story[section].length;
-            return <Pressable accessibilityRole="button" key={section} onPress={() => onOpenSection(section)} style={styles.categoryCard}>
-              <View style={styles.categoryTop}><View style={[styles.categoryIcon, { backgroundColor: theme.accentSoft }]}><Text style={styles.categoryIconText}>{info.icon}</Text></View><Text style={styles.categoryCount}>{total}</Text></View>
-              <Text style={styles.categoryTitle}>{info.title}</Text><Text style={styles.categorySubtitle}>{info.subtitle}</Text>
-            </Pressable>;
-          })}
-        </View>
+        {/* Feature: put chapters before optional reference material so the next writing task is immediately reachable. */}
         <View style={[styles.hubBottomGrid, { flexDirection: desktop ? 'row' : 'column' }]}>
           <View style={styles.chapterPanel}>
             <View style={styles.panelHeading}><View><Text style={styles.panelTitle}>Chapters</Text><Text style={styles.panelSubtitle}>The pages that make the story.</Text></View><Pressable accessibilityRole="button" onPress={onNewChapter} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>＋ Add chapter</Text></Pressable></View>
@@ -564,6 +564,20 @@ function StoryScreen({ theme, styles, story, saveState, navigationControl, deskt
             )}
           </View>
           <ActivityPanel theme={theme} styles={styles} story={story} />
+        </View>
+        {/* Feature: project tools are accessible before choosing a chapter. */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}><Pressable accessibilityRole="button" onPress={() => onProjectTools('style')} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>Project style guide</Text></Pressable><Pressable accessibilityRole="button" onPress={() => onProjectTools('targets')} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>Targets & release buffer</Text></Pressable></View>
+        <SectionHeading title="Explore this story" caption="Choose what you want to work on" styles={styles} />
+        <View style={styles.categoryGrid}>
+          {sections.map((section) => {
+            const info = SECTION_INFO[section];
+            const total = section === 'chapters' ? story.chapters.length : story[section].length;
+            return <Pressable accessibilityRole="button" key={section} onPress={() => onOpenSection(section)} style={styles.categoryCard}>
+              {/* Feature: compact title-and-count rows keep reference sections easy to scan after the chapter list. */}
+              <View style={styles.categoryTop}><Text style={styles.categoryTitle}>{info.title}</Text><Text style={styles.categoryCount}>{total}</Text></View>
+              <Text style={styles.categorySubtitle}>{info.subtitle}</Text>
+            </Pressable>;
+          })}
         </View>
       </ScrollView>
     </>
@@ -621,7 +635,7 @@ function CollectionScreen({ theme, styles, story, section, saveState, navigation
         <View style={styles.collectionIntro}><View style={[styles.collectionIcon, { backgroundColor: theme.accentSoft }]}><Text style={styles.categoryIconText}>{info.icon}</Text></View><View style={styles.collectionCopy}><Text style={styles.collectionTitle}>{info.title}</Text><Text style={styles.collectionSubtitle}>{info.subtitle}</Text></View></View>
         {section === 'chapters' ? (
           story.chapters.length === 0 ? <EmptyState title="No chapters yet" detail="Give the story its first page." styles={styles} action="＋ Create first chapter" onAction={onNewChapter} /> :
-            <View style={styles.collectionList}>{story.chapters.map((chapter, index) => <View key={chapter.id} style={styles.collectionRowWrap}><Pressable accessibilityRole="button" onPress={() => onOpenChapter(story, chapter)} style={styles.collectionRow}><View style={styles.chapterNumber}><Text style={styles.chapterNumberText}>{String(index + 1).padStart(2, '0')}</Text></View><View style={styles.collectionRowCopy}><Text style={styles.collectionRowTitle}>{chapter.title}</Text><Text style={styles.collectionRowMeta}>{countWords(chapter.html).toLocaleString()} words · {new Date(chapter.updatedAt).toLocaleDateString()}</Text></View><Text style={styles.cardArrow}>›</Text></Pressable><View style={styles.rowTools}><Pressable accessibilityRole="button" accessibilityLabel={`Move ${chapter.title} up`} accessibilityState={{ disabled: index === 0 }} disabled={index === 0} onPress={() => onMoveChapter(chapter.id, -1)} style={styles.smallTool}><Text style={styles.smallToolText}>↑</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Move ${chapter.title} down`} accessibilityState={{ disabled: index === story.chapters.length - 1 }} disabled={index === story.chapters.length - 1} onPress={() => onMoveChapter(chapter.id, 1)} style={styles.smallTool}><Text style={styles.smallToolText}>↓</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Delete ${chapter.title}`} onPress={() => onDeleteChapter(chapter)} style={styles.smallTool}><Text style={styles.deleteIcon}>×</Text></Pressable></View></View>)}</View>
+            <View style={styles.collectionList}>{story.chapters.map((chapter, index) => <View key={chapter.id} style={styles.collectionRowWrap}><Pressable accessibilityRole="button" onPress={() => onOpenChapter(story, chapter)} style={styles.collectionRow}><View style={styles.chapterNumber}><Text style={styles.chapterNumberText}>{String(index + 1).padStart(2, '0')}</Text></View><View style={styles.collectionRowCopy}><Text style={styles.collectionRowTitle}>{chapter.title}</Text><Text style={styles.collectionRowMeta}>{countWords(chapter.html).toLocaleString()} words · {new Date(chapter.updatedAt).toLocaleDateString()}</Text></View><Text style={styles.cardArrow}>›</Text></Pressable><View style={styles.rowTools}><Pressable accessibilityRole="button" accessibilityLabel={`Move ${chapter.title} up`} accessibilityState={{ disabled: index === 0 }} disabled={index === 0} onPress={() => onMoveChapter(chapter.id, -1)} style={[styles.smallTool, index === 0 && styles.disabledTool]}><Text style={styles.smallToolText}>↑</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Move ${chapter.title} down`} accessibilityState={{ disabled: index === story.chapters.length - 1 }} disabled={index === story.chapters.length - 1} onPress={() => onMoveChapter(chapter.id, 1)} style={[styles.smallTool, index === story.chapters.length - 1 && styles.disabledTool]}><Text style={styles.smallToolText}>↓</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Delete ${chapter.title}`} onPress={() => onDeleteChapter(chapter)} style={styles.smallTool}><Text style={styles.deleteIcon}>×</Text></Pressable></View></View>)}</View>
         ) : (
           groups.length ? groups.map((group) => {
             const groupEntries = entries.filter((entry) => entry.category === group);
@@ -633,7 +647,7 @@ function CollectionScreen({ theme, styles, story, section, saveState, navigation
         {/* Feature: legacy world entries outside the standard categories remain visible and can be recategorised. */}
         {section === 'worldbuilding' && entries.some((entry) => !WORLD_GROUPS.includes(entry.category)) && <View style={styles.groupSection}><Text style={styles.groupTitle}>Other world entries</Text><EntryList entries={entries.filter((entry) => !WORLD_GROUPS.includes(entry.category))} story={story} section={section} styles={styles} onOpen={onOpenEntry} onDelete={onDeleteEntry} /></View>}
         {section !== 'chapters' && !groups.length && entries.length > 0 && <Pressable accessibilityRole="button" onPress={create} style={styles.addAnother}><Text style={styles.secondaryButtonText}>{createLabel}</Text></Pressable>}
-        {section === 'art' && <Text style={styles.helperNote}>Add visual references by saving their title, source link, and notes. File attachments can be added as a later milestone.</Text>}
+        {section === 'art' && <Text style={styles.helperNote}>Save a title, source link, and notes for each visual reference.</Text>}
       </ScrollView>
     </>
   );
@@ -654,8 +668,8 @@ function EntryScreen({ theme, styles, story, entry, section, saveState, navigati
       {section === 'characters' ? <CharacterWorkspace key={entry.id} story={story} character={entry} theme={theme} onPatch={onPatch} onOpenChapter={onOpenChapter} onOpenGroup={(group) => onOpenReference('worldbuilding', group)} /> : section === 'worldbuilding' ? <WorldWorkspace key={entry.id} story={story} entry={entry} theme={theme} onPatch={onPatch} onOpenChapter={onOpenChapter} onOpenCharacter={(character) => onOpenReference('characters', character)} onOpenWorld={(world) => onOpenReference('worldbuilding', world)} /> : <ScrollView contentContainerStyle={styles.entryEditorArea}>
         <View style={styles.entryPaper}>
           <Text style={styles.eyebrow}>{entry.category.toUpperCase()}</Text>
-          <TextInput value={entry.title} onChangeText={(title) => onPatch({ title })} placeholder="Title" placeholderTextColor={theme.muted} style={styles.entryTitleInput} />
-          <TextInput value={entry.content} onChangeText={(content) => onPatch({ content })} placeholder={section === 'research' ? 'Add a summary, source link, or details to check…' : section === 'art' ? 'Describe the reference, add a source link, or note what it inspires…' : 'Write down the details you want to remember…'} placeholderTextColor={theme.muted} multiline textAlignVertical="top" style={styles.entryBodyInput} />
+          <TextInput accessibilityLabel="Entry title" value={entry.title} onChangeText={(title) => onPatch({ title })} placeholder="Title" placeholderTextColor={theme.muted} style={styles.entryTitleInput} />
+          <TextInput accessibilityLabel="Entry notes" value={entry.content} onChangeText={(content) => onPatch({ content })} placeholder={section === 'research' ? 'Add a summary, source link, or details to check…' : section === 'art' ? 'Describe the reference, add a source link, or note what it inspires…' : 'Write down the details you want to remember…'} placeholderTextColor={theme.muted} multiline textAlignVertical="top" style={styles.entryBodyInput} />
           <Text style={styles.entryTimestamp}>Updated {new Date(entry.updatedAt).toLocaleString()}</Text>
         </View>
       </ScrollView>}
@@ -663,6 +677,7 @@ function EntryScreen({ theme, styles, story, entry, section, saveState, navigati
   );
 }
 
+// Feature: long breadcrumbs truncate and header controls wrap without squeezing the current screen title away.
 function TopBar({ title, subtitle, saveState, navigationControl, styles, theme, backLabel, onBack, actionLabel, onAction }: {
   title: string; subtitle: string; saveState: string; navigationControl?: ReactNode; styles: ReturnType<typeof makeStyles>; theme: Theme; backLabel?: string; onBack?: () => void; actionLabel?: string; onAction?: () => void;
 }) {
@@ -670,7 +685,7 @@ function TopBar({ title, subtitle, saveState, navigationControl, styles, theme, 
     <View style={[styles.topbar, { borderBottomColor: theme.border }]}>
       {navigationControl}
       {onBack && <Pressable accessibilityRole="button" onPress={onBack} style={styles.topBack}><Text style={styles.topBackText}>‹  {backLabel}</Text></Pressable>}
-      <View style={styles.topbarCopy}><Text style={styles.eyebrow}>{subtitle}</Text><Text numberOfLines={1} style={styles.topbarTitle}>{title}</Text></View>
+      <View style={styles.topbarCopy}><Text numberOfLines={1} style={styles.topbarTitle}>{title}</Text><Text numberOfLines={1} style={styles.breadcrumb}>{subtitle}</Text></View>
       <View style={styles.topbarRight}>
         {onAction && <Pressable accessibilityRole="button" onPress={onAction} style={styles.topAction}><Text style={styles.topActionText}>{actionLabel}</Text></Pressable>}
       </View>
@@ -686,11 +701,12 @@ function EmptyState({ title, detail, styles, action, onAction }: { title: string
   return <View style={styles.emptyState}><View style={styles.emptyMark}><Text style={styles.emptyMarkText}>✎</Text></View><Text style={styles.emptyTitle}>{title}</Text><Text style={styles.emptyDetail}>{detail}</Text>{action && onAction && <Pressable accessibilityRole="button" onPress={onAction} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>{action}</Text></Pressable>}</View>;
 }
 
-// Feature: mobile navigation reports and displays the actual current destination.
-function MobileNavigation({ screen, notesActive, theme, styles, onLibrary, onStory, onNotes }: { screen: Screen; notesActive: boolean; theme: Theme; styles: ReturnType<typeof makeStyles>; onLibrary: () => void; onStory?: () => void; onNotes?: () => void }) {
-  return <View style={[styles.mobileNav, { borderTopColor: theme.border }]}><Pressable accessibilityRole="button" accessibilityLabel="My stories" accessibilityState={{ selected: screen === 'library' }} onPress={onLibrary} style={styles.mobileNavButton}><Text style={screen === 'library' ? styles.mobileNavActive : styles.mobileNavIcon}>▤</Text><Text style={screen === 'library' ? styles.mobileNavActive : styles.mobileNavText}>Stories</Text></Pressable>{onStory && <Pressable accessibilityRole="button" accessibilityLabel="Story workspace" accessibilityState={{ selected: screen !== 'library' && !notesActive }} onPress={onStory} style={styles.mobileNavButton}><Text style={screen !== 'library' && !notesActive ? styles.mobileNavActive : styles.mobileNavIcon}>⌂</Text><Text style={screen !== 'library' && !notesActive ? styles.mobileNavActive : styles.mobileNavText}>Story</Text></Pressable>}{onNotes && <Pressable accessibilityRole="button" accessibilityLabel="Story notes" accessibilityState={{ selected: notesActive }} onPress={onNotes} style={styles.mobileNavButton}><Text style={notesActive ? styles.mobileNavActive : styles.mobileNavIcon}>✎</Text><Text style={notesActive ? styles.mobileNavActive : styles.mobileNavText}>Notes</Text></Pressable>}</View>;
+// Feature: mobile navigation reports the exact destination and resumes the remembered chapter from Write.
+function MobileNavigation({ screen, notesActive, theme, styles, onLibrary, onStory, onWrite, onNotes }: { screen: Screen; notesActive: boolean; theme: Theme; styles: ReturnType<typeof makeStyles>; onLibrary: () => void; onStory?: () => void; onWrite?: () => void; onNotes?: () => void }) {
+  return <View style={[styles.mobileNav, { borderTopColor: theme.border }]}><Pressable accessibilityRole="button" accessibilityLabel="My stories" accessibilityState={{ selected: screen === 'library' }} onPress={onLibrary} style={styles.mobileNavButton}><Text style={screen === 'library' ? styles.mobileNavActive : styles.mobileNavIcon}>▤</Text><Text style={screen === 'library' ? styles.mobileNavActive : styles.mobileNavText}>Stories</Text></Pressable>{onStory && <Pressable accessibilityRole="button" accessibilityLabel="Story workspace" accessibilityState={{ selected: screen === 'story' }} onPress={onStory} style={styles.mobileNavButton}><Text style={screen === 'story' ? styles.mobileNavActive : styles.mobileNavIcon}>⌂</Text><Text style={screen === 'story' ? styles.mobileNavActive : styles.mobileNavText}>Story</Text></Pressable>}{onWrite && <Pressable accessibilityLabel="Continue writing" accessibilityState={{ selected: screen === 'editor' }} onPress={onWrite} style={styles.mobileNavButton}><Text style={screen === 'editor' ? styles.mobileNavActive : styles.mobileNavIcon}>▤</Text><Text style={screen === 'editor' ? styles.mobileNavActive : styles.mobileNavText}>Write</Text></Pressable>}{onNotes && <Pressable accessibilityRole="button" accessibilityLabel="Story notes" accessibilityState={{ selected: notesActive }} onPress={onNotes} style={styles.mobileNavButton}><Text style={notesActive ? styles.mobileNavActive : styles.mobileNavIcon}>✎</Text><Text style={notesActive ? styles.mobileNavActive : styles.mobileNavText}>Notes</Text></Pressable>}</View>;
 }
 
+// Feature: required-title guidance, selected categories, and fixed actions make creation consistent at short heights.
 function CreateDialog({ dialog, title, content, error, category, theme, styles, activeStoryTitle, onChangeTitle, onChangeContent, onChangeCategory, onCancel, onSubmit }: {
   dialog: DialogState | null; title: string; content: string; error: string; category: EntryCategory; theme: Theme; styles: ReturnType<typeof makeStyles>; activeStoryTitle: string;
   onChangeTitle: (value: string) => void; onChangeContent: (value: string) => void; onChangeCategory: (value: EntryCategory) => void; onCancel: () => void; onSubmit: () => void;
@@ -703,17 +719,20 @@ function CreateDialog({ dialog, title, content, error, category, theme, styles, 
     <Modal accessibilityLabel={titleText} transparent animationType="fade" visible onRequestClose={onCancel}>
       <View style={styles.modalBackdrop}><View style={styles.modalCard}>
         <View style={styles.modalHeader}><Text style={styles.modalTitle}>{titleText}</Text><Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onCancel}><Text style={styles.modalClose}>×</Text></Pressable></View>
-        {isDelete ? <Text style={styles.modalDetail}>This action removes it from {activeStoryTitle || 'your library'} on this device.</Text> : <>
-          <Text style={styles.fieldLabel}>Title</Text>
+        {/* Feature: scroll long forms independently so Create and Cancel stay reachable on short screens. */}
+        <ScrollView style={styles.modalScroll} keyboardShouldPersistTaps="handled">
+        {isDelete ? <Text style={styles.modalDetail}>This action removes it from {dialog.kind === 'delete-story' ? 'your library' : activeStoryTitle || 'this story'} on this device. You can recover it from Version history.</Text> : <>
+          <Text style={styles.fieldLabel}>Title (required)</Text>
           <TextInput accessibilityLabel={dialog.kind === 'story' ? 'New story title' : dialog.kind === 'chapter' ? 'New chapter title' : 'New entry title'} autoFocus value={title} onChangeText={onChangeTitle} placeholder={dialog.kind === 'story' ? 'A name for your story' : dialog.kind === 'chapter' ? 'Chapter title' : 'Give this entry a name'} placeholderTextColor={theme.muted} style={styles.modalInput} onSubmitEditing={onSubmit} />
           {!!error && <Text accessibilityRole="alert" style={styles.modalDetail}>{error}</Text>}
           {dialog.kind === 'story' && <><Text style={styles.fieldLabel}>Premise or description (optional)</Text><TextInput accessibilityLabel="New story premise or description" value={content} onChangeText={onChangeContent} multiline placeholder="What is this story about?" placeholderTextColor={theme.muted} style={[styles.modalInput, styles.modalTextarea]} /></>}
           {dialog.kind === 'entry' && <>
-            {groups.length > 0 && <><Text style={styles.fieldLabel}>Group</Text><View style={styles.optionRow}>{groups.map((group) => <Pressable accessibilityRole="button" key={group} onPress={() => onChangeCategory(group)} style={[styles.optionChip, category === group && styles.optionChipActive]}><Text style={[styles.optionText, category === group && styles.optionTextActive]}>{group}</Text></Pressable>)}</View></>}
+            {groups.length > 0 && <><Text style={styles.fieldLabel}>Group</Text><View style={styles.optionRow}>{groups.map((group) => <Pressable accessibilityRole="button" key={group} accessibilityState={{ selected: category === group }} onPress={() => onChangeCategory(group)} style={[styles.optionChip, category === group && styles.optionChipActive]}><Text style={[styles.optionText, category === group && styles.optionTextActive]}>{group}</Text></Pressable>)}</View></>}
             <Text style={styles.fieldLabel}>{dialog.section === 'art' ? 'Reference notes or link (optional)' : 'Notes (optional)'}</Text>
             <TextInput accessibilityLabel="New entry notes" value={content} onChangeText={onChangeContent} multiline placeholder={dialog.section === 'research' ? 'Source, summary, or questions to check…' : dialog.section === 'art' ? 'Source link and what you want to remember…' : 'Write a few details…'} placeholderTextColor={theme.muted} style={[styles.modalInput, styles.modalTextarea]} />
           </>}
         </>}
+        </ScrollView>
         <View style={styles.modalActions}><Pressable accessibilityRole="button" onPress={onCancel} style={styles.cancelButton}><Text style={styles.cancelButtonText}>Cancel</Text></Pressable><Pressable accessibilityRole="button" onPress={onSubmit} style={[styles.primaryButton, isDelete && styles.dangerButton]}><Text style={styles.primaryButtonText}>{isDelete ? 'Delete' : 'Create'}</Text></Pressable></View>
       </View></View>
     </Modal>
@@ -732,7 +751,7 @@ function singularSection(section: SectionKey) {
 }
 
 
-function makeStyles(theme: Theme, desktop: boolean) {
+function makeStyles(theme: Theme, desktop: boolean, spaciousContent: boolean) {
   return StyleSheet.create({
     shell: { flex: 1, flexDirection: 'row', backgroundColor: theme.background },
     loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: theme.background },
@@ -740,35 +759,38 @@ function makeStyles(theme: Theme, desktop: boolean) {
     recoveryNotice: { padding: 12, backgroundColor: theme.secondarySoft, color: theme.text, fontSize: 14, lineHeight: 18 },
     sidebarToggle: { width: 44, height: 44, flexShrink: 0, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border },
     sidebarToggleText: { color: theme.accent, fontSize: 18, fontWeight: '700' },
-    sidebar: { width: 250, margin: 14, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 23, paddingHorizontal: 18, paddingTop: 20, shadowColor: '#332F38', shadowOpacity: 0.09, shadowOffset: { width: 0, height: 4 }, shadowRadius: 16, elevation: 3 },
+    // Feature: the compact navigator fills its bounded modal and keeps all chapter links scrollable.
+    navigationBackdrop: { flex: 1, backgroundColor: 'rgba(18,16,21,0.34)', padding: 12 },
+    navigationDrawer: { flex: 1, width: '100%', maxWidth: 360, backgroundColor: theme.surface, borderRadius: 18, overflow: 'hidden' },
+    navigationClose: { minHeight: 44, alignSelf: 'flex-end', justifyContent: 'center', paddingHorizontal: 16 },
+    sidebar: { width: desktop ? 250 : '100%', flex: desktop ? undefined : 1, minHeight: 0, margin: desktop ? 14 : 0, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 23, paddingHorizontal: 18, paddingTop: 20 },
     brandBlock: { flexDirection: 'row', alignItems: 'center', gap: 11, marginBottom: 28 },
     brandMark: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.accentSoft },
     brandMarkText: { fontSize: 22, fontWeight: '700', color: theme.accent, fontStyle: 'italic' },
     brand: { fontSize: 15, fontWeight: '700', color: theme.text },
-    brandCaption: { color: theme.muted, fontSize: 12, letterSpacing: 1.15, marginTop: 3 },
+    brandCaption: { color: theme.muted, fontSize: 12, marginTop: 3 },
     newButton: { minHeight: 44, backgroundColor: theme.accent, borderRadius: 14, paddingVertical: 11, paddingHorizontal: 13, marginBottom: 26 },
     newButtonText: { color: theme.mode === 'dark' ? '#201B2A' : '#FFFFFF', fontSize: 14, fontWeight: '700' },
-    navHeading: { color: theme.muted, fontSize: 12, fontWeight: '800', letterSpacing: 1.15, marginLeft: 9, marginBottom: 9 },
+    navHeading: { color: theme.muted, fontSize: 13, fontWeight: '600', marginLeft: 9, marginBottom: 9 },
     projectsHeading: { marginTop: 29 },
-    navRow: { height: 40, paddingHorizontal: 10, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 11 },
+    navRow: { minHeight: 44, paddingHorizontal: 10, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 11 },
     navRowActive: { backgroundColor: theme.accentSoft },
     navIcon: { width: 16, textAlign: 'center', fontSize: 14, color: theme.muted },
     navIconActive: { color: theme.accent },
-    navLabel: { fontSize: 14, color: theme.muted, fontWeight: '500' },
+    navLabel: { flex: 1, minWidth: 0, fontSize: 14, color: theme.muted, fontWeight: '500' },
     navLabelActive: { color: theme.accent, fontWeight: '700' },
     storyNavList: { flex: 1 },
-    storyNavRow: { minHeight: 38, paddingHorizontal: 9, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
+    storyNavRow: { minHeight: 44, paddingHorizontal: 9, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
     storyNavRowActive: { backgroundColor: theme.surfaceAlt },
     projectDot: { width: 8, height: 8, borderRadius: 4 },
     storyNavTitle: { color: theme.text, fontSize: 14, flex: 1 },
     storyNavTitleActive: { fontWeight: '700' },
     chapterNavGroup: { paddingBottom: 6 },
-    storyMenuLink: { marginLeft: 25, paddingVertical: 6 },
-    storyMenuText: { color: theme.muted, fontSize: 14 },
-    chapterNavRow: { marginLeft: 25, paddingVertical: 6, paddingRight: 4 },
+    chapterNavHeading: { color: theme.muted, fontSize: 12, fontWeight: '700', marginLeft: 10, marginTop: 16, marginBottom: 6 },
+    chapterNavRow: { minHeight: 44, justifyContent: 'center', marginLeft: 10, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10 },
     chapterNavText: { color: theme.muted, fontSize: 14 },
     chapterNavTextActive: { color: theme.accent, fontWeight: '700' },
-    addChapterLink: { marginLeft: 25, paddingVertical: 7 },
+    addChapterLink: { minHeight: 44, justifyContent: 'center', marginLeft: 20, paddingVertical: 7 },
     addChapterText: { color: theme.muted, fontSize: 14 },
     sidebarFooter: { borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 14, paddingBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 9 },
     avatar: { height: 31, width: 31, borderRadius: 16, backgroundColor: theme.secondarySoft, alignItems: 'center', justifyContent: 'center' },
@@ -776,13 +798,14 @@ function makeStyles(theme: Theme, desktop: boolean) {
     profileCopy: { flex: 1, minWidth: 0 },
     profileName: { color: theme.text, fontSize: 14, fontWeight: '700' },
     profileStatus: { color: theme.muted, fontSize: 12, marginTop: 3 },
-    settingsIcon: { color: theme.muted, fontSize: 15 },
-    topbar: { minHeight: 64, flexShrink: 0, flexWrap: 'wrap', paddingVertical: 10, marginHorizontal: desktop ? 18 : 9, marginTop: desktop ? 14 : 8, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 18, paddingHorizontal: desktop ? 18 : 14, flexDirection: 'row', alignItems: 'center', gap: 14, shadowColor: '#332F38', shadowOpacity: 0.04, shadowOffset: { width: 0, height: 2 }, shadowRadius: 8, elevation: 1 },
-    topBack: { paddingVertical: 8, paddingRight: 8 },
+    topbar: { minHeight: 64, flexShrink: 0, flexWrap: 'wrap', paddingVertical: 10, marginHorizontal: desktop ? 18 : 9, marginTop: desktop ? 14 : 8, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 18, paddingHorizontal: desktop ? 18 : 14, flexDirection: 'row', alignItems: 'center', gap: 14, },
+    topBack: { minHeight: 44, justifyContent: 'center', maxWidth: '100%', paddingVertical: 8, paddingRight: 8 },
     topBackText: { color: theme.accent, fontSize: 14, fontWeight: '700' },
-    topbarCopy: { flex: 1, minWidth: 0 },
-    eyebrow: { color: theme.muted, fontSize: 12, letterSpacing: 1.2, fontWeight: '800' },
-    topbarTitle: { color: theme.text, fontSize: 15, fontWeight: '700', marginTop: 3 },
+    topbarCopy: { flex: 1, minWidth: 120 },
+    eyebrow: { color: theme.muted, fontSize: 13, fontWeight: '600' },
+    // Feature: title-first headers distinguish the current screen from its supporting context.
+    breadcrumb: { color: theme.muted, fontSize: 13, marginTop: 3 },
+    topbarTitle: { color: theme.text, fontSize: 17, fontWeight: '700' },
     topbarRight: { maxWidth: '100%', flexDirection: 'row', alignItems: 'center', gap: 15 },
     saveBadge: { flexDirection: 'row', alignItems: 'center', gap: 7 },
     saveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: theme.secondary },
@@ -797,7 +820,7 @@ function makeStyles(theme: Theme, desktop: boolean) {
     primaryButton: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start', backgroundColor: theme.accent, borderRadius: 13, paddingHorizontal: 15, paddingVertical: 10 },
     primaryButtonText: { color: theme.mode === 'dark' ? '#201B2A' : '#FFFFFF', fontSize: 14, fontWeight: '700' },
     sectionHeading: { flexWrap: 'wrap', gap: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12, marginTop: 8 },
-    sectionTitle: { color: theme.text, fontSize: 15, fontWeight: '700' },
+    sectionTitle: { color: theme.text, fontSize: 18, fontWeight: '700' },
     sectionCaption: { color: theme.muted, fontSize: 12 },
     exampleLabel: { color: theme.accent, fontSize: 12, fontWeight: '700', marginVertical: 6 },
     storyCardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 13, marginBottom: 31 },
@@ -806,7 +829,7 @@ function makeStyles(theme: Theme, desktop: boolean) {
     storyCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
     storyCardMark: { width: 30, height: 30, borderRadius: 10, backgroundColor: theme.accentSoft, alignItems: 'center', justifyContent: 'center' },
     storyCardMarkText: { color: theme.accent, fontSize: 14 },
-    storyCardTitle: { color: theme.text, fontSize: 14, fontWeight: '700' },
+    storyCardTitle: { color: theme.text, fontSize: 18, fontWeight: '700' },
     storyCardDescription: { color: theme.muted, fontSize: 14, lineHeight: 20, marginTop: 5, minHeight: 30 },
     storyStats: { flexDirection: 'row', gap: 12, marginTop: 14 },
     statText: { color: theme.muted, fontSize: 12 },
@@ -821,7 +844,7 @@ function makeStyles(theme: Theme, desktop: boolean) {
     recentMeta: { color: theme.muted, fontSize: 12, marginTop: 4 },
     mutedText: { color: theme.muted, fontSize: 14 },
     storyHubContent: { width: '100%', maxWidth: 1280, alignSelf: 'center', paddingHorizontal: desktop ? 38 : 16, paddingVertical: desktop ? 28 : 18, paddingBottom: 48 },
-    storyHubHero: { borderRadius: 17, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, padding: desktop ? 25 : 18, marginBottom: 27, flexDirection: desktop ? 'row' : 'column', alignItems: desktop ? 'center' : 'stretch', gap: 18 },
+    storyHubHero: { borderRadius: 17, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, padding: desktop ? 25 : 18, marginBottom: 27, flexDirection: spaciousContent ? 'row' : 'column', alignItems: spaciousContent ? 'center' : 'stretch', gap: 18 },
     storyHubHeroCopy: { flex: 1 },
     hubTitleInput: { color: theme.text, fontSize: desktop ? 25 : 22, fontWeight: '700', padding: 0, marginTop: 8 },
     hubDescription: { color: theme.muted, fontSize: 14, lineHeight: 20, padding: 0, marginTop: 7, minHeight: 36 },
@@ -829,16 +852,15 @@ function makeStyles(theme: Theme, desktop: boolean) {
     continueButton: { backgroundColor: theme.secondarySoft, borderRadius: 9, paddingHorizontal: 15, paddingVertical: 11 },
     continueButtonText: { color: theme.secondary, fontSize: 14, fontWeight: '700' },
     categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 27 },
-    categoryCard: { width: desktop ? '31%' : '100%', minHeight: 135, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 13, padding: 15 },
-    categoryTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-    categoryIcon: { width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    categoryCard: { width: desktop ? '31%' : '100%', minHeight: 88, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 13, padding: 15 },
+    categoryTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 4 },
     categoryIconText: { color: theme.accent, fontSize: 14, fontWeight: '700' },
     categoryCount: { color: theme.muted, fontSize: 14 },
-    categoryTitle: { color: theme.text, fontSize: 14, fontWeight: '700' },
-    categorySubtitle: { color: theme.muted, fontSize: 12, lineHeight: 20, marginTop: 4 },
-    chapterPanel: { flex: desktop ? 1 : undefined, backgroundColor: theme.surface, borderRadius: 13, borderWidth: 1, borderColor: theme.border, padding: desktop ? 19 : 14 },
-    hubBottomGrid: { gap: 14, alignItems: 'stretch' },
-    activityPanel: { width: desktop ? 280 : '100%', backgroundColor: theme.surface, borderRadius: 13, borderWidth: 1, borderColor: theme.border, padding: desktop ? 19 : 14 },
+    categoryTitle: { color: theme.text, fontSize: 15, fontWeight: '700', flexShrink: 1 },
+    categorySubtitle: { color: theme.muted, fontSize: 13, lineHeight: 20, marginTop: 4 },
+    chapterPanel: { flex: spaciousContent ? 1 : undefined, minWidth: 0, backgroundColor: theme.surface, borderRadius: 13, borderWidth: 1, borderColor: theme.border, padding: desktop ? 19 : 14 },
+    hubBottomGrid: { gap: 14, alignItems: 'stretch', marginBottom: 24 },
+    activityPanel: { width: spaciousContent ? 280 : '100%', backgroundColor: theme.surface, borderRadius: 13, borderWidth: 1, borderColor: theme.border, padding: desktop ? 19 : 14 },
     activityHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12 },
     activityClock: { color: theme.accent, fontSize: 18 },
     activityList: { borderTopWidth: 1, borderTopColor: theme.border },
@@ -852,7 +874,7 @@ function makeStyles(theme: Theme, desktop: boolean) {
     activityDetail: { color: theme.muted, fontSize: 14, lineHeight: 20 },
     activityEmpty: { color: theme.muted, fontSize: 14, lineHeight: 20, paddingVertical: 12, borderTopWidth: 1, borderTopColor: theme.border },
     panelHeading: { flexWrap: 'wrap', gap: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12 },
-    panelTitle: { color: theme.text, fontSize: 14, fontWeight: '700' },
+    panelTitle: { color: theme.text, fontSize: 17, fontWeight: '700' },
     panelSubtitle: { color: theme.muted, fontSize: 12, marginTop: 4 },
     secondaryButton: { minHeight: 44, justifyContent: 'center', borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, alignSelf: 'flex-start' },
     secondaryButtonText: { color: theme.accent, fontSize: 14, fontWeight: '700' },
@@ -877,6 +899,8 @@ function makeStyles(theme: Theme, desktop: boolean) {
     collectionRowMeta: { color: theme.muted, fontSize: 12, lineHeight: 20, marginTop: 4 },
     rowTools: { flexDirection: 'row', justifyContent: 'flex-end', gap: 5, paddingHorizontal: 10, paddingBottom: 6 },
     smallTool: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 5 },
+    // Feature: unavailable reorder actions are visually distinct from enabled controls.
+    disabledTool: { opacity: 0.35 },
     smallToolText: { color: theme.muted, fontSize: 14 },
     deleteIcon: { color: theme.muted, fontSize: 15 },
     groupSection: { marginBottom: 23 },
@@ -908,20 +932,21 @@ function makeStyles(theme: Theme, desktop: boolean) {
     mobileNavText: { color: theme.muted, fontSize: 14 },
     modalBackdrop: { flex: 1, backgroundColor: 'rgba(18,16,21,0.34)', alignItems: 'center', justifyContent: 'center', padding: 18 },
     modalCard: { maxHeight: '92%', width: '100%', maxWidth: 440, backgroundColor: theme.surface, borderRadius: 15, borderWidth: 1, borderColor: theme.border, padding: 20 },
-    modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
-    modalTitle: { color: theme.text, fontSize: 15, fontWeight: '700' },
+    modalScroll: { flexShrink: 1 },
+    modalHeader: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 },
+    modalTitle: { flex: 1, color: theme.text, fontSize: 15, fontWeight: '700' },
     modalClose: { minWidth: 44, minHeight: 44, textAlign: 'center', color: theme.muted, fontSize: 23, paddingHorizontal: 4 },
     modalDetail: { color: theme.muted, fontSize: 14, lineHeight: 20, marginBottom: 14 },
     fieldLabel: { color: theme.muted, fontSize: 12, fontWeight: '700', marginBottom: 6, marginTop: 8 },
     modalInput: { borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 9, color: theme.text, fontSize: 14, backgroundColor: theme.background },
     modalTextarea: { minHeight: 80, textAlignVertical: 'top', marginBottom: 5 },
     optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 4 },
-    optionChip: { borderWidth: 1, borderColor: theme.border, borderRadius: 18, paddingHorizontal: 9, paddingVertical: 6 },
+    optionChip: { minHeight: 44, justifyContent: 'center', borderWidth: 1, borderColor: theme.border, borderRadius: 18, paddingHorizontal: 9, paddingVertical: 6 },
     optionChipActive: { backgroundColor: theme.accentSoft, borderColor: theme.accent },
     optionText: { color: theme.muted, fontSize: 14 },
     optionTextActive: { color: theme.accent, fontWeight: '700' },
-    modalActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 9, marginTop: 18 },
-    cancelButton: { paddingHorizontal: 13, paddingVertical: 9 },
+    modalActions: { flexShrink: 0, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 9, marginTop: 18 },
+    cancelButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 13, paddingVertical: 9 },
     cancelButtonText: { color: theme.muted, fontSize: 14, fontWeight: '600' },
     // Feature: destructive actions keep readable button text in both palettes.
     dangerButton: { backgroundColor: theme.mode === 'dark' ? theme.peach : '#99513F' },
