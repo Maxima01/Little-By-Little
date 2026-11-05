@@ -98,7 +98,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
-    "react-native-enriched-html": "1.1.1",
+    "react-native-enriched-html": "^1.2.0",
     "react-native-url-polyfill": "4.0.0",
     "react-native-web": "^0.21.2"
   },
@@ -114,5 +114,8 @@
     "pdfjs-dist": "^6.4.299",
     "typescript": "~6.0.3",
     "wait-on": "^8.0.4"
+  },
+  "overrides": {
+    "dompurify": "3.4.17"
   }
 }

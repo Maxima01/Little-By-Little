@@ -3,7 +3,10 @@ import { readFile, writeFile } from 'node:fs/promises';
 // Feature: disable images in both native HTML parsers before rendering or clipboard paste creates a loader.
 const root = new URL('../node_modules/react-native-enriched-html/', import.meta.url);
 const { version } = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
-if (version !== '1.1.1') throw new Error('Review the native editor image policy for this dependency version.');
+// Feature: support reviewed 1.2.0 parser locations while retaining the image-loading block and rejecting unreviewed upgrades.
+if (!['1.1.1', '1.2.0'].includes(version)) {
+  throw new Error(`Review the native editor image policy for dependency version ${version}.`);
+}
 
 const patches = [
   {
