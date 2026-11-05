@@ -24,6 +24,8 @@ function createWindow() {
     minWidth: 760,
     minHeight: 620,
     title: 'Little by Little',
+    // Feature: match the taskbar and window identity to the branded installer and shortcuts.
+    icon: path.join(__dirname, 'build', 'icon.ico'),
     backgroundColor: '#FAF7F2',
     show: false,
     webPreferences: {

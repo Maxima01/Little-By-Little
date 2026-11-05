@@ -17,7 +17,11 @@ const staging = fileURLToPath(new URL('../.desktop-package/', import.meta.url));
 const sourcePackage = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 await rm(staging, { recursive: true, force: true });
 await mkdir(staging, { recursive: true });
-await cp(new URL('../dist/', import.meta.url), new URL('../.desktop-package/dist/', import.meta.url), { recursive: true });
+// Feature: exclude website downloads so a desktop release never bundles another installer inside itself.
+await cp(new URL('../dist/', import.meta.url), new URL('../.desktop-package/dist/', import.meta.url), { recursive: true, filter: (source) => !source.replaceAll('\\', '/').includes('/downloads') });
+// Feature: ship the same icon used by the executable, installer, window and shortcuts.
+await mkdir(`${staging}build`, { recursive: true });
+await copyFile(`${root}build/icon.ico`, `${staging}build/icon.ico`);
 for (const runtimeFile of ['electron-main.cjs', 'electron-preload.cjs', 'electron-pdf.cjs', 'electron-backup.cjs', 'electron-security.cjs']) {
   await copyFile(`${root}${runtimeFile}`, `${staging}${runtimeFile}`);
 }

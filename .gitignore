@@ -19,3 +19,9 @@ release/
 
 # Generated website design measurements and browser screenshots stay local.
 .taste-skill/
+
+# Feature: downloadable binaries are generated release artifacts, not source or signing credentials.
+public/downloads/
+*.pfx
+*.p12
+*.key

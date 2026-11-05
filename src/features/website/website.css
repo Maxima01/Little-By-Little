@@ -1,4 +1,17 @@
 /* Feature: public web pages extend the workspace’s paper, violet and serif identity with scoped responsive styles. */
+/* Feature: a responsive download section keeps platform, signing status and integrity details beside the installer. */
+.site-download { display:grid; grid-template-columns:1fr 1fr; gap:80px; padding:100px 64px; background:#eae3f5; scroll-margin-top:24px; }
+.site-download>div { min-width:0; }
+.site-download h2 { margin:24px 0!important; max-width:16ch; }
+.site-download p { max-width:54ch; margin:16px 0!important; }
+.download-details { align-self:center; }
+.download-details .site-action { margin:8px 0; }
+.download-details details { margin:24px 0; }
+.download-details summary { cursor:pointer; padding:10px 0; }
+.download-details summary:focus-visible { outline:3px solid #67518f; outline-offset:3px; }
+.download-hash { display:block; overflow-wrap:anywhere; font-size:14px; }
+@media(max-width:900px) { .site-download { gap:40px; padding:64px 32px; } }
+@media(max-width:700px) { .site-download { grid-template-columns:1fr; padding:60px 20px; gap:32px; } }
 /* Feature: public documents scroll normally; the application keeps Expo’s fixed workspace root. */
 html:has(.website),body:has(.website) { height:auto; overflow:auto; scroll-behavior:smooth; scrollbar-color:#67518f #faf7f2; }
 #root:has(.website) { display:block; height:auto; }

@@ -45,6 +45,9 @@ Open `http://127.0.0.1:8093`. The production server serves only known documents 
 
 ## Create a standalone Windows executable
 
+<!-- Feature: build the branded installer and website download together, with separate verified-signing support. -->
+Run `npm run release:windows` to prepare the Windows installer and website download section together. See [Desktop releases](./DESKTOP_RELEASE.md) for hosting, checksums, bundled dependencies, and publicly trusted signing. Builds without a signing certificate are labeled unsigned previews.
+
 <!-- Feature: package the complete offline renderer and Electron runtime as a Windows installer or portable executable. -->
 The packaged desktop app does not require Node.js, Expo, a browser, the web application, or an internet connection to launch. Its story library remains in Electron's local application-data profile across normal closes, restarts, and installed upgrades. Uninstalling or manually clearing the application's data can remove that library. The desktop app now keeps automatic external backups in **Documents/Little by Little Backups** by default; use **Automatic backups** to choose another destination.
 

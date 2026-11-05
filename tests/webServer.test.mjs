@@ -7,6 +7,33 @@ import { once } from 'node:events';
 import test from 'node:test';
 import { contentSecurityPolicy, createRequestGate, createWebServer } from '../server/web.mjs';
 
+// Feature: release files download as attachments while arbitrary files in the download directory stay private.
+test('desktop download route serves only release artifacts with fresh metadata', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'novel-download-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await mkdir(join(directory, 'downloads'));
+  await writeFile(join(directory, 'index.html'), 'home');
+  await writeFile(join(directory, '404.html'), 'missing');
+  await writeFile(join(directory, 'downloads', 'latest.json'), '{"version":"0.1.1"}');
+  await writeFile(join(directory, 'downloads', 'Little-by-Little-0.1.1-x64-Setup.exe'), 'fixture installer');
+  await writeFile(join(directory, 'downloads', 'private.json'), 'not public');
+  const server = await createWebServer({ directory });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(async () => { server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)); });
+  const port = server.address().port;
+  const manifest = await get(port, '/downloads/latest.json');
+  assert.equal(manifest.status, 200);
+  assert.match(manifest.headers['content-type'], /application\/json/);
+  assert.equal(manifest.headers['cache-control'], 'no-store');
+  const installer = await get(port, '/downloads/Little-by-Little-0.1.1-x64-Setup.exe');
+  assert.equal(installer.status, 200);
+  assert.match(installer.headers['content-disposition'], /^attachment;/);
+  assert.equal(installer.body, 'fixture installer');
+  assert.equal((await get(port, '/downloads/private.json')).status, 404);
+  assert.equal((await get(port, '/downloads/%2e%2e/package.json')).status, 400);
+});
+
 // Feature: raw HTTP targets retain encoded traversal attempts that browser fetch would normalize away.
 function get(port, path, method = 'GET', headers = {}) {
   return new Promise((resolve, reject) => {

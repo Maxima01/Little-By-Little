@@ -6,6 +6,7 @@ import { pipeline } from 'node:stream/promises';
 import { extname, isAbsolute, relative, resolve, sep } from 'node:path';
 
 const TYPES = {
+  '.json': 'application/json; charset=utf-8', '.exe': 'application/octet-stream', '.txt': 'text/plain; charset=utf-8',
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.avif': 'image/avif',
@@ -102,6 +103,8 @@ function route(requestTarget) {
   // Feature: public legal documents are explicit published routes rather than missing-page fallbacks.
   if (['/', '/index.html', '/app', '/app/', '/terms', '/terms/', '/privacy', '/privacy/'].includes(pathname)) return { file: 'index.html', status: 200, document: true };
   if (pathname === '/404.html') return { file: '404.html', status: 404, document: true };
+  // Feature: only the release manifest, checksums and versioned Windows installers are publicly downloadable.
+  if (/^\/downloads\/(?:latest\.json|SHA256SUMS\.txt|Little-by-Little-\d+\.\d+\.\d+-x64-Setup\.exe)$/.test(pathname)) return { file: pathname.slice(1), status: 200, document: false, download: true };
   const expo = /^\/_expo\/static\/(?:js\/web\/[a-zA-Z0-9_-]+\.js|css\/[a-zA-Z0-9_-]+\.css)$/.test(pathname);
   const asset = /^\/(?:assets|website)\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_.-]+\.(?:png|jpe?g|webp|avif|gif|svg|ico|woff2?|ttf|otf|css|js)$/.test(pathname);
   if (expo || asset) return { file: pathname.slice(1), status: 200, document: false };
@@ -182,7 +185,10 @@ export async function createWebServer({ directory = resolve('dist'), supabaseUrl
       response.statusCode = target.status;
       response.setHeader('Content-Type', TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream');
       response.setHeader('Content-Length', info.size);
+      // Feature: installers download as attachments; manifests are refreshed so visitors never receive a stale release link.
+      if (target.download && extname(file) === '.exe') response.setHeader('Content-Disposition', `attachment; filename="${target.file.split('/').at(-1)}"`);
       if (!target.document) response.setHeader('Cache-Control', target.file.startsWith('_expo/') ? 'public, max-age=31536000, immutable' : 'public, max-age=3600');
+      if (target.download) response.setHeader('Cache-Control', 'no-store');
       if (target.status === 404) response.setHeader('X-Robots-Tag', 'noindex');
       if (request.method === 'HEAD') response.end();
       else await pipeline(createReadStream(file), response);

@@ -21,10 +21,13 @@
     "typecheck": "tsc --noEmit",
     "build:web": "node --experimental-strip-types scripts/check-public-config.mjs && expo export --platform web && node scripts/prepare-web-build.mjs",
     "build:desktop": "npm run build:web && node scripts/prepare-desktop-build.mjs",
-    "package:windows": "npm run build:desktop && install-electron && electron-builder --win nsis",
+    "package:windows": "npm run build:desktop && install-electron && electron-builder --win nsis --x64 --publish never",
     "package:windows:portable": "npm run build:desktop && install-electron && electron-builder --win portable",
     "package:windows:dir": "npm run build:desktop && install-electron && electron-builder --win dir",
-    "verify": "npm run typecheck && npm run test && npm run build:web"
+    "verify": "npm run typecheck && npm run test && npm run build:web",
+    "brand:generate": "node scripts/generate-brand.mjs",
+    "release:windows": "npm run package:windows && node scripts/stage-desktop-download.mjs && npm run build:web",
+    "release:windows:signed": "npm run build:desktop && install-electron && electron-builder --win nsis --x64 --publish never -c.forceCodeSigning=true && node scripts/stage-desktop-download.mjs --require-signed && npm run build:web"
   },
   "build": {
     "appId": "com.littlebylittle.desktop",
@@ -46,23 +49,41 @@
       "electron-preload.cjs",
       "electron-pdf.cjs",
       "electron-backup.cjs",
-      "package.json"
+      "package.json",
+      "build/icon.ico"
     ],
     "win": {
       "target": [
         "nsis"
       ],
-      "artifactName": "Little-by-Little-${version}-${arch}-Setup.${ext}"
+      "artifactName": "Little-by-Little-${version}-${arch}-Setup.${ext}",
+      "icon": "build/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Little by Little"
+      "shortcutName": "Little by Little",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "perMachine": false,
+      "allowElevation": false,
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": false
     },
     "portable": {
       "artifactName": "Little-by-Little-${version}-${arch}-Portable.${ext}"
+    },
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true
     }
   },
   "dependencies": {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { countTextWords } from '../../domain/model';
 import LandingAccount, { type AccountMode } from './LandingAccount';
 import './website.css';
+import DesktopDownload from './DesktopDownload';
 
 const opening = 'The sea had kept its promise.\n\nMara found the lantern burning in the upstairs window, exactly where she had left it eleven years before. Beneath the glass, a folded letter waited.\n\nShe knew the handwriting. That was the impossible part.';
 const questions = [
@@ -42,12 +43,12 @@ export function LandingPage() {
   const [accountMode, setAccountMode] = useState<AccountMode>('signin');
   return <div className="website">
     <a className="site-skip" href="#main">Skip to content</a>
-    <header className="site-header"><Wordmark /><nav aria-label="Website"><a href="#workspace">The workspace</a><a href="#questions">Questions</a><a className="site-account-link" href="#account" onClick={() => setAccountMode('signin')}>Sign in</a><a className="site-account-link" href="#account" onClick={() => setAccountMode('register')}>Register</a></nav></header>
+    <header className="site-header"><Wordmark /><nav aria-label="Website"><a href="#workspace">The workspace</a><a href="#download">Download</a><a className="site-account-link" href="#account" onClick={() => setAccountMode('signin')}>Sign in</a><a className="site-account-link" href="#account" onClick={() => setAccountMode('register')}>Register</a></nav></header>
     <main id="main">
       <section className="site-hero" aria-labelledby="hero-title">
         {/* Feature: one open manuscript spread joins the product introduction and editable sample in the existing brand palette. */}
         <div className="hero-sheet">
-        <div className="hero-copy"><h1 id="hero-title">A little<br />more story</h1><p>A writing space for your manuscript, your characters, and the world they live in.</p><a className="site-action" href="/app">Create a story for free</a><p className="hero-note">No account needed. Write now, add cloud saves later.</p></div>
+        <div className="hero-copy"><h1 id="hero-title">A little<br />more story</h1><p>A writing space for your manuscript, your characters, and the world they live in.</p><a className="site-action" href="/app">Create a story for free</a><p className="hero-note">No account needed. Write now, add cloud saves later. <a href="#download">Get the Windows app</a></p></div>
         <div className="hero-work"><WritingSample /></div>
         </div>
       </section>
@@ -60,6 +61,8 @@ export function LandingPage() {
       </section>
       <section className="site-keeping" aria-labelledby="keeping-title"><div><h2 id="keeping-title">Yours, page by page</h2><p>Local saving keeps your work on this device. Download backups, return to saved revisions, and export a manuscript when you are ready to share it.</p><p>Want to write on another device? Optional account-based cloud saves let you choose when to sync.</p><a className="site-text-link" href="#questions">How saving works</a></div><figure><img src="/website/save-history.png" alt="Workspace save and recovery controls in Little by Little" width="660" height="430" loading="lazy" /><figcaption>Keep a backup outside your browser, too.</figcaption></figure></section>
       <section className="site-questions" id="questions" aria-labelledby="questions-title"><h2 id="questions-title">Before the first page</h2><div className="question-layout"><div className="question-index">{questions.map(([question], index) => <button id={`question-${index}`} key={question} type="button" aria-expanded={index === answer} aria-controls="question-answer" onClick={() => setAnswer(index)}>{question}<span aria-hidden="true">{index === answer ? '−' : '+'}</span></button>)}</div><div className="question-answer" id="question-answer" role="region" aria-labelledby={`question-${answer}`}><h3>{questions[answer][0]}</h3><p>{questions[answer][1]}</p></div></div></section>
+      {/* Feature: desktop distribution stays optional alongside the browser writing desk. */}
+      <DesktopDownload />
       <LandingAccount mode={accountMode} onModeChange={setAccountMode} />
       <section className="site-close"><h2>One page is a beginning</h2><p>Start for free. Sign in whenever you’re ready for cloud saves.</p><a className="site-action" href="/app">Create a story for free</a></section>
     </main>
