@@ -94,8 +94,23 @@ export function contentSecurityPolicy(supabaseUrl, turnstileSiteKey = '') {
   ].join('; ');
 }
 
-// Feature: allow only known app documents and build asset types, never arbitrary files from the checkout.
-function route(requestTarget) {
+// Feature: share response protections between the Node host and generated Vercel deployments.
+export function securityHeaders(supabaseUrl, turnstileSiteKey = '') {
+  return {
+    'Content-Security-Policy': contentSecurityPolicy(supabaseUrl, turnstileSiteKey),
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'no-referrer',
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Cross-Origin-Resource-Policy': 'same-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+    'Strict-Transport-Security': 'max-age=31536000',
+    'Cache-Control': 'no-store',
+  };
+}
+
+// Feature: share the published file allowlist with Vercel packaging; private exports stay out of both hosts.
+export function publicWebRoute(requestTarget) {
   if (typeof requestTarget !== 'string' || requestTarget.length > 2048 || !requestTarget.startsWith('/')) return null;
   let pathname;
   try { pathname = decodeURIComponent(requestTarget.split('?')[0]); } catch { return null; }
@@ -119,18 +134,10 @@ export async function createWebServer({ directory = resolve('dist'), supabaseUrl
   // Fail startup when no build exists instead of serving an accidental directory or development fallback.
   await readFile(resolve(root, 'index.html'));
   await readFile(resolve(root, '404.html'));
-  const policy = contentSecurityPolicy(supabaseUrl, turnstileSiteKey);
+  const headers = securityHeaders(supabaseUrl, turnstileSiteKey);
   const requestGate = createRequestGate(requestLimits);
   const server = createServer({ maxHeaderSize: 8192, headersTimeout: 5_000, requestTimeout: 10_000, keepAliveTimeout: 2_000 }, async (request, response) => {
-    response.setHeader('Content-Security-Policy', policy);
-    response.setHeader('X-Content-Type-Options', 'nosniff');
-    response.setHeader('X-Frame-Options', 'DENY');
-    response.setHeader('Referrer-Policy', 'no-referrer');
-    response.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-    response.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
-    response.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
-    response.setHeader('Strict-Transport-Security', 'max-age=31536000');
-    response.setHeader('Cache-Control', 'no-store');
+    for (const [name, value] of Object.entries(headers)) response.setHeader(name, value);
 
     // Feature: isolate proxied clients using one header that only the configured socket peer may supply.
     let client = canonicalIp(request.socket.remoteAddress);
@@ -165,7 +172,7 @@ export async function createWebServer({ directory = resolve('dist'), supabaseUrl
       response.end(request.method === 'HEAD' ? undefined : 'Request bodies are not accepted.');
       return;
     }
-    const target = route(request.url);
+    const target = publicWebRoute(request.url);
     if (!target) {
       response.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
       response.end(request.method === 'HEAD' ? undefined : 'Invalid request.');

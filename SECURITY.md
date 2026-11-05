@@ -45,6 +45,12 @@ Keep the Node port private. Proxy mode accepts a single client IP from the confi
 
 On a static host, serve `dist/`, route `/app` to `app/index.html`, return `404.html` with status 404 for unknown paths, and configure equivalent response headers. Never use a catch-all 200 rewrite. Static file hosting alone does not apply `server/web.mjs` protections.
 
+<!-- Feature: Vercel deployments share the Node host's browser protections and publish only reviewed web artifacts. -->
+For Vercel, the checked-in `vercel.json` runs `npm run build:vercel`. This emits `.vercel/output/config.json` with the same CSP, anti-framing, MIME-sniffing, referrer and permissions headers as the Node host. The provider origin and optional Turnstile allowance come from the production build environment. Only allowlisted web artifacts enter `.vercel/output/static`; environment files, source maps, export metadata and linked files are excluded or rejected. Known documents have explicit routes, unsupported write methods return 405, and missing routes return 404. Vercel's edge controls remain separate from the Node host's in-process request limits.
+
+<!-- Feature: check the published configuration without creating accounts or reading manuscript content. -->
+After a deployment, run `npm run inspect:hosted-security -- https://little-by-little-delta.vercel.app`. The inspection reports selected public response headers, missing-file responses and the configured Supabase project's public Auth settings. It omits cookies, credentials and response bodies. A successful build alone does not prove deployment or validate dashboard-only password, rate-limit, CAPTCHA, MFA or backup settings. Enabling provider CAPTCHA requires a coordinated browser sign-in path for desktop/native clients, which cannot render the current web challenge. The app's existing account UI has no self-service password-reset screen yet; these hosting changes do not add one or alter the manuscript encryption model.
+
 ## Untrusted manuscripts and desktop privileges
 
 Imported, pasted and synced manuscript HTML is treated as untrusted. The editor and export paths filter markup through an allowlist before it enters a live document. Parsing occurs in an inert template; unsupported elements, active attributes and unsafe styles are removed. Client-side validation does not replace server-side authorization or storage limits.

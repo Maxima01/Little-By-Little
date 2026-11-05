@@ -2,6 +2,8 @@ node_modules/
 .expo/
 dist/
 .desktop-package/
+# Feature: generated hosting output and Vercel project links stay out of source control.
+.vercel/
 release/
 *.log
 .local-checks/
