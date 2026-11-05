@@ -3,6 +3,7 @@ import test from 'node:test';
 import JSZip from 'jszip';
 import { JSDOM } from 'jsdom';
 import { createStory, createChapter } from '../src/domain/model.ts';
+import { WRITING_FONTS } from '../src/domain/writingFonts.ts';
 import { exportSelection } from '../src/features/workspace/lib/workspaceUx.ts';
 import { cleanChapterHtml, exportFileName, storyDocx, storyEpub, storyHtml, storyText } from '../src/features/workspace/lib/exportDocument.ts';
 
@@ -64,6 +65,16 @@ test('text exports preserve paragraphs, list nesting, Unicode, line breaks, and 
   assert.match(markdown, /#### Inside/);
 });
 
+// Feature: an imported href cannot add a raw HTML block to exported Markdown.
+test('Markdown link destinations encode content that would break link syntax', () => {
+  const story = manuscript();
+  story.chapters[0].html = `<p><a href="https://example.test\n\n<script>location='https://example.invalid'</script>">Citation</a> <a href="https://example.test/a(b)?q=one%20two">Source</a></p>`;
+  const markdown = storyText(story, true);
+  assert.doesNotMatch(markdown, /<\/?script>/);
+  assert.match(markdown, /\[Citation\]\(https:\/\/example\.test%0A%0A%3Cscript%3E/);
+  assert.match(markdown, /\[Source\]\(https:\/\/example\.test\/a%28b%29\?q=one%20two\)/);
+});
+
 test('safe HTML retains writing styles while excluding executable content and remote media', () => {
   const html = cleanChapterHtml('<script>bad()</script><p onclick="bad()" style="text-align:right;background:url(https://bad.test)">Safe <a href="javascript:bad()">link</a><img src="https://bad.test"/><iframe src="file:///secret">hidden</iframe><span style="font-weight:bold">bold</span></p>').innerHTML;
   assert.match(html, /text-align:right/);
@@ -73,6 +84,25 @@ test('safe HTML retains writing styles while excluding executable content and re
   assert.match(document, /First &lt;chapter&gt;/);
   assert.match(document, /break-before:page/);
   assert.match(document, /Content-Security-Policy/);
+});
+
+// Feature: new chapter and inline font choices remain intact in exported HTML and Word documents.
+test('expanded writing fonts survive HTML sanitizing and Word export', async () => {
+  const story = createStory('Typography');
+  const chapter = createChapter('Fonts');
+  chapter.fontFamily = 'Cambria';
+  chapter.html = '<p>Inherited chapter font</p>' + WRITING_FONTS.map(({ value }) => `<p style="font-family:'${value}'">${value}</p>`).join('');
+  story.chapters = [chapter];
+  const clean = cleanChapterHtml(chapter.html);
+  const paragraphs = Array.from(clean.querySelectorAll('p')).slice(1);
+  assert.deepEqual(paragraphs.map((paragraph) => paragraph.style.fontFamily.replace(/["']/g, '')), WRITING_FONTS.map(({ value }) => value));
+  assert.match(storyHtml(story), /<section style="font-family:Cambria;/);
+  assert.equal(cleanChapterHtml('<p style="font-family:Unknown">Text</p>').firstElementChild.style.fontFamily, '');
+  const zip = await JSZip.loadAsync(await storyDocx(story));
+  const document = xml(await zip.file('word/document.xml').async('string'));
+  const fonts = Array.from(document.getElementsByTagName('w:rFonts')).map((font) => font.getAttribute('w:ascii'));
+  for (const { value } of WRITING_FONTS) assert.ok(fonts.includes(value), `${value} should survive Word export`);
+  assert.equal(fonts.filter((font) => font === 'Cambria').length, 2);
 });
 
 test('Word output is editable OOXML with rich text, page breaks, lists, and external link relationships', async () => {

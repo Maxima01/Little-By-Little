@@ -1,3 +1,4 @@
+import { workspaceGeometry } from '../../../theme/theme';
 import type { ProsePreferences, TextAnchor } from '../../../domain/model';
 import type { RevisionTab } from './RevisionTools';
 import { anchorText, replaceHtmlText, type TextEdit } from '../lib/manuscriptOperations';
@@ -23,6 +24,7 @@ import {
 import type { Chapter, ChapterScene, Story, WritingPreferences } from '../../../domain/model';
 import { countTextWords, plainText, type WritingAlignment, type WritingBlockStyle, type WritingFontFamily } from '../../../domain/model';
 import WritingToolbar, { type ToolbarAction } from './WritingToolbar';
+import WritingHeader from './WritingHeader';
 import ChapterContextPanel from './ChapterContextPanel';
 import ChapterPreview from './ChapterPreview';
 import WritingTools from './WritingTools';
@@ -179,21 +181,8 @@ export default function RichEditor({ chapter, story, theme, desktop, saveState, 
 
   return (
     <View style={styles.root}>
-      <View style={styles.topbar}>
-        {!focusMode && navigationControl}
-        <Pressable accessibilityRole="button" onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backText}>‹  Story</Text>
-        </Pressable>
-        <View style={styles.topbarStory}>
-          <Text numberOfLines={1} style={styles.eyebrow}>{story.title} / Chapter {chapterNumber}</Text>
-          <TextInput value={title} onChangeText={changeTitle} onBlur={() => onTitleChange(title.trim() || 'Untitled chapter')} style={styles.titleInput} accessibilityLabel="Chapter title" />
-        </View>
-        <View style={styles.topbarActions}>
-          <Pressable accessibilityLabel={focusMode ? 'Exit focus mode' : 'Enter focus mode'} accessibilityState={{ selected: focusMode }} onPress={() => changeFocusMode(!focusMode)} style={[styles.previewButton, focusMode && { backgroundColor: theme.accentSoft }]}><Text style={styles.previewButtonText}>{focusMode ? 'Exit focus' : 'Focus'}</Text></Pressable>
-          {!focusMode && <Pressable accessibilityLabel="Export manuscript" onPress={onExport} style={styles.previewButton}><Text style={styles.previewButtonText}>Export</Text></Pressable>}
-          <Pressable accessibilityRole="button" onPress={() => setPreviewOpen(true)} style={styles.previewButton}><Text style={styles.previewButtonText}>Preview</Text></Pressable>
-        </View>
-      </View>
+      <WritingHeader theme={theme} desktop={desktop} title={title} storyTitle={story.title} chapterNumber={chapterNumber} focusMode={focusMode} navigationControl={navigationControl}
+        onTitleChange={changeTitle} onTitleCommit={() => onTitleChange(title.trim() || 'Untitled chapter')} onBack={onBack} onFocusModeChange={changeFocusMode} onExport={onExport} onPreview={() => setPreviewOpen(true)} />
 
       {!focusMode && <WritingDeskControls theme={theme} view={writingView} onView={setWritingView} contextOpen={showContext} onContext={onContextToggle} onTools={() => setToolsOpen(true)} onRevision={(tab) => onRevisionOpen(captureSelection(), tab)} />}
       {!focusMode && writingView.formatting && <WritingToolbar
@@ -268,18 +257,12 @@ export default function RichEditor({ chapter, story, theme, desktop, saveState, 
 
 
 // Matches the desktop writing canvas while adapting assistance controls for native device widths.
+// Feature: a quiet, square manuscript surface distinguishes prose from the surrounding controls.
 function makeStyles(theme: Theme, desktop: boolean) {
   return StyleSheet.create({
     documentLabel: { color: theme.muted, fontSize: 13, marginBottom: 24 },
     root: { flex: 1, minHeight: 0, backgroundColor: theme.background },
-    topbar: { flexWrap: 'wrap', paddingVertical: 8, minHeight: 64, flexShrink: 0, marginHorizontal: desktop ? 18 : 9, marginTop: desktop ? 10 : 8, paddingHorizontal: desktop ? 18 : 14, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
-    backButton: { minHeight: 44, justifyContent: 'center', paddingVertical: 9, paddingHorizontal: 8 },
-    backText: { color: theme.accent, fontSize: 14, fontWeight: '700' },
-    topbarStory: { flex: 1, minWidth: 90 },
-    eyebrow: { color: theme.muted, fontSize: 12 },
-    titleInput: { color: theme.text, fontSize: 15, fontWeight: '700', padding: 0, marginTop: 3 },
     saveBadge: { flexDirection: 'row', gap: 7, alignItems: 'center' },
-    topbarActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     previewButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: theme.border },
     previewButtonText: { color: theme.accent, fontSize: 14, fontWeight: '700' },
     saveDot: { height: 7, width: 7, borderRadius: 4, backgroundColor: theme.secondary },
@@ -287,7 +270,7 @@ function makeStyles(theme: Theme, desktop: boolean) {
     pageArea: { flexGrow: 1, alignItems: 'center', padding: desktop ? 26 : 12, paddingBottom: 40 },
     assistanceBar: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingHorizontal: desktop ? 26 : 12, paddingTop: 10 },
     documentWorkspace: { width: '100%', maxWidth: 1120, alignSelf: 'center', gap: 16 },
-    paper: { width: '100%', maxWidth: 790, minHeight: desktop ? 760 : 580, paddingHorizontal: desktop ? 64 : 24, paddingTop: desktop ? 48 : 28, paddingBottom: 70, backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1, borderRadius: 12 },
+    paper: { width: '100%', maxWidth: 790, minHeight: desktop ? 760 : 580, paddingHorizontal: desktop ? 64 : 24, paddingTop: desktop ? 48 : 28, paddingBottom: 70, backgroundColor: theme.surface, borderRadius: workspaceGeometry.pageRadius },
     contextOverlay: { flex: 1, padding: 12, backgroundColor: 'rgba(18,16,21,0.34)', alignItems: 'flex-end', justifyContent: 'center' },
     contextDrawer: { width: '100%', maxWidth: 420, maxHeight: '92%', padding: 12, borderRadius: 16, backgroundColor: theme.surface, gap: 10 },
     contextHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },

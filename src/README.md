@@ -2,13 +2,15 @@
 
 ## Entry points and ownership
 
-`index.js` registers `shell/App.tsx` with Expo. `electron-main.cjs` opens either the development server or the built `dist/index.html`; its sandboxed preload exposes only the PDF export bridge. `scripts/prepare-desktop-build.mjs` adjusts built asset links for offline `file://` loading and stages the Electron runtime.
+<!-- Feature: platform-specific entries separate public web pages from the shared writing workspace. -->
+`index.js` registers `shell/Entry`: native platforms open `App.tsx`, while `Entry.web.tsx` selects the landing page, `/app`, or a missing-page view. Electron opens the workspace directly through its trusted preload or local file entry. `electron-main.cjs` opens either the development server or built `dist/index.html`; its sandboxed preload exposes scoped PDF and backup operations. `electron-security.cjs` binds privileged IPC and navigation to that exact document. `scripts/prepare-desktop-build.mjs` adjusts built asset links for offline `file://` loading and stages the Electron runtime.
 
 The application is organized by ownership:
 
 | Path | Responsibility |
 | --- | --- |
 | `shell/App.tsx` | Screen navigation and composition; it delegates saving to the workspace hook. |
+| `shell/Entry.web.tsx` and `features/website/` | Public browser routes, landing page, temporary writing sample and custom 404. |
 | `domain/model.ts` | The persisted workspace, story, chapter, scene, and entry shapes, defaults, and shared operations. |
 | `features/editor/` | Manuscript editing, preview, revision, recovery, proofreading, prose analysis, and word lookup. |
 | `features/characters/` and `features/world/` | Dossiers, references, memberships, and event records. |
@@ -16,6 +18,9 @@ The application is organized by ownership:
 | `components/` and `theme/` | Shared accessible controls and visual tokens. |
 
 Feature folders keep UI in `components/` and reusable logic in `lib/`; workspace hooks live in `hooks/`. Keep native and web platform pairs in the same folder (for example, `RichEditor.tsx` and `RichEditor.web.tsx`) so Expo selects the implementation. Cross-feature imports should use the owning feature's logic instead of copying it.
+
+<!-- Feature: bounded web hosting and private cloud operations form separate security boundaries. -->
+`server/web.mjs` serves only production documents/assets with security headers, path containment and request limits. `scripts/prepare-web-build.mjs` prepares static-host documents. Optional cloud sync uses `cloudSync.ts` and authenticated read/save RPCs; `supabase/schema.sql` installs or upgrades private storage. See [SECURITY.md](../SECURITY.md) before deploying the database and matching clients. Public environment configuration is validated before bundling and at runtime.
 
 ## Save and recovery path
 

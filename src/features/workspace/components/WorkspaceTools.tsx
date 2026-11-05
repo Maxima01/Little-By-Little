@@ -9,11 +9,13 @@ import { listWorkspaceVersions } from '../lib/storage';
 import type { SavedVersion } from '../lib/saveHistory';
 import type { Theme } from '../../../theme/theme';
 import AutomaticBackups from './AutomaticBackups';
+import CloudSaves from './CloudSaves';
+import type { CloudSyncController } from '../hooks/useCloudSync';
 
-type Props = { theme: Theme; workspace: Workspace | null; saveState: string; lastSavedAt: string | null; onSave: () => Promise<unknown>; onRestore: (workspace: Workspace) => Promise<void>; onRecoverChapter: (request: ChapterRecoveryRequest) => Promise<void> };
+type Props = { cloud: CloudSyncController; theme: Theme; workspace: Workspace | null; saveState: string; lastSavedAt: string | null; onSave: () => Promise<unknown>; onRestore: (workspace: Workspace) => Promise<void>; onRecoverChapter: (request: ChapterRecoveryRequest) => Promise<void> };
 
 // Keeps save, recovery, and portable backups accessible from every writing screen and startup errors.
-export default function WorkspaceTools({ theme, workspace, saveState, lastSavedAt, onSave, onRestore, onRecoverChapter }: Props) {
+export default function WorkspaceTools({ cloud, theme, workspace, saveState, lastSavedAt, onSave, onRestore, onRecoverChapter }: Props) {
   const styles = makeStyles(theme);
   const [open, setOpen] = useState(false);
   const [versions, setVersions] = useState<SavedVersion[]>([]);
@@ -64,6 +66,8 @@ export default function WorkspaceTools({ theme, workspace, saveState, lastSavedA
     </View>
     {/* Feature: external backup status remains accessible even when local loading or saving fails. */}
     <AutomaticBackups theme={theme} workspace={workspace} detailsVisible={menuOpen} />
+    {/* Feature: account and conflict controls stay available beside local backup tools. */}
+    <CloudSaves theme={theme} cloud={cloud} detailsVisible={menuOpen} />
     {!open && (error || notice) ? <View style={styles.noticeRow}><Text accessibilityRole={error ? 'alert' : undefined} accessibilityLiveRegion="polite" style={[styles.message, { flex: 1 }]}>{error || notice}</Text>{!!notice && !error && <Pressable accessibilityRole="button" accessibilityLabel="Dismiss workspace notice" onPress={() => setNotice('')} style={styles.button}><Text style={styles.buttonText}>Dismiss</Text></Pressable>}</View> : null}
     <Modal accessibilityLabel="Workspace version history and recovery" visible={open} transparent animationType="fade" onRequestClose={() => { if (!busy) setOpen(false); }}>
       <View style={styles.overlay}><View style={[styles.modal, comparison && { maxWidth: 1040 }]}>
@@ -95,14 +99,14 @@ export default function WorkspaceTools({ theme, workspace, saveState, lastSavedA
   </>;
 }
 
-// Matches the existing pastel workspace, with readable preview rows and compact persistent controls.
+// Feature: a flat utility strip keeps saving and recovery visible without adding another floating panel.
 function makeStyles(theme: Theme) {
   return StyleSheet.create({
     noticeRow: { flexDirection: 'row', flexShrink: 0, alignItems: 'center', gap: 8, paddingRight: 12, backgroundColor: theme.accentSoft },
-    bar: { flexShrink: 0, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 },
+    bar: { flexShrink: 0, paddingHorizontal: 24, paddingVertical: 4, backgroundColor: theme.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 },
     status: { flex: 1, minWidth: 0, gap: 3 }, statusText: { color: theme.text, fontSize: 13 }, detail: { color: theme.muted, fontSize: 12, lineHeight: 19 },
     actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
-    button: { minHeight: 44, justifyContent: 'center', borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 }, buttonText: { color: theme.accent, fontSize: 14, fontWeight: '600' },
+    button: { minHeight: 44, justifyContent: 'center', borderRadius: 5, paddingHorizontal: 12, paddingVertical: 8 }, buttonText: { color: theme.accent, fontSize: 14, fontWeight: '600' },
     primary: { backgroundColor: theme.accent, borderRadius: 8, paddingHorizontal: 15, paddingVertical: 10 }, primaryText: { color: theme.mode === 'dark' ? '#201B2A' : '#fff', fontSize: 14, fontWeight: '700' },
     message: { padding: 12, color: theme.text, backgroundColor: theme.accentSoft, fontSize: 14, lineHeight: 19 },
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', padding: 20, justifyContent: 'center', alignItems: 'center' },

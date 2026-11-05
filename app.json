@@ -1,9 +1,10 @@
 {
   "expo": {
-    "name": "Novel Workspace",
+    "name": "Little by Little",
     "slug": "novel-writing-workspace",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic"
+    "userInterfaceStyle": "automatic",
+    "plugins": [["expo-secure-store", { "configureAndroidBackup": true }]]
   }
 }

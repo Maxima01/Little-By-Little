@@ -1,9 +1,11 @@
 import { manuscriptText } from '../features/editor/lib/manuscriptText.ts';
+import type { WritingFontFamily } from './writingFonts.ts';
+
+export type { WritingFontFamily } from './writingFonts.ts';
 
 // Portable workspace data lives here; keep optional additions compatible with older JSON backups.
 export type SectionKey = 'chapters' | 'characters' | 'worldbuilding' | 'art' | 'notes' | 'research';
 export type EntryCategory = 'Major' | 'Minor' | 'Side character' | 'Setting' | 'History' | 'Faction' | 'Family' | 'Organization' | 'Reference';
-export type WritingFontFamily = 'Georgia' | 'Arial' | 'Courier New';
 export type WritingBlockStyle = 'Paragraph' | 'Heading 1' | 'Heading 2' | 'Heading 3' | 'Quote';
 export type WritingAlignment = 'left' | 'center' | 'right' | 'justify';
 

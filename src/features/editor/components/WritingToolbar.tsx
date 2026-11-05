@@ -1,8 +1,11 @@
+import { workspaceGeometry } from '../../../theme/theme';
 import Pressable from '../../../components/AccessiblePressable';
+import DropdownChevron from '../../../components/DropdownChevron';
 import { useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Theme } from '../../../theme/theme';
 import type { WritingAlignment, WritingBlockStyle, WritingFontFamily } from '../../../domain/model';
+import { WRITING_FONTS } from '../../../domain/writingFonts';
 
 type MenuName = 'style' | 'font' | 'size';
 export type ToolbarAction = 'bold' | 'italic' | 'underline' | 'strike' | 'bullet' | 'numbered' | 'undo' | 'redo';
@@ -31,11 +34,8 @@ const menuOptions: Record<MenuName, { label: string; value: string }[]> = {
     { label: 'Heading 3', value: 'Heading 3' },
     { label: 'Block quote', value: 'Quote' },
   ],
-  font: [
-    { label: 'Georgia · Literary', value: 'Georgia' },
-    { label: 'Arial · Clean', value: 'Arial' },
-    { label: 'Courier New · Typewriter', value: 'Courier New' },
-  ],
+  // Feature: the font picker uses the same expanded catalog as backup validation and exports.
+  font: [...WRITING_FONTS],
   size: [14, 16, 18, 20, 24].map((size) => ({ label: String(size), value: String(size) })),
 };
 
@@ -86,10 +86,10 @@ export default function WritingToolbar({
       <View style={styles.toolbarFrame}>
       <ScrollView horizontal showsHorizontalScrollIndicator keyboardShouldPersistTaps="always" onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)} onContentSizeChange={(width) => setContentWidth(width)} style={[styles.toolbarScroll, { height: contentWidth > viewportWidth + 1 ? 80 : 66 }]} contentContainerStyle={styles.toolbar}>
         <View style={styles.toolGroup}>
-          <PickerButton label="Text style" value={blockStyle} onPress={() => setOpenMenu('style')} styles={styles} />
-          <PickerButton label="Font" value={fontFamily} onPress={() => setOpenMenu('font')} styles={styles} />
+          <PickerButton label="Text style" value={blockStyle} expanded={openMenu === 'style'} onPress={() => setOpenMenu('style')} styles={styles} color={theme.muted} />
+          <PickerButton label="Font" value={fontFamily} expanded={openMenu === 'font'} onPress={() => setOpenMenu('font')} styles={styles} color={theme.muted} />
           <Pressable accessibilityRole="button" accessibilityLabel="Decrease font size" onPress={() => onFontSizeChange(Math.max(10, fontSize - 2))} style={styles.sizeStep}><Text style={styles.sizeStepText}>A−</Text></Pressable>
-          <PickerButton label="Font size" value={String(fontSize)} onPress={() => setOpenMenu('size')} styles={styles} compact />
+          <PickerButton label="Font size" value={String(fontSize)} expanded={openMenu === 'size'} onPress={() => setOpenMenu('size')} styles={styles} color={theme.muted} compact />
           <Pressable accessibilityRole="button" accessibilityLabel="Increase font size" onPress={() => onFontSizeChange(Math.min(48, fontSize + 2))} style={styles.sizeStep}><Text style={styles.sizeStepText}>A+</Text></Pressable>
         </View>
         <View style={styles.groupDivider} />
@@ -127,7 +127,7 @@ export default function WritingToolbar({
           <Pressable accessibilityRole="button" accessibilityLabel="Close formatting menu" onPress={() => setOpenMenu(null)} style={styles.menuDismiss} />
           <View accessibilityViewIsModal style={styles.menuPanel}>
             <Text style={styles.menuTitle}>{openMenu ? menuTitles[openMenu] : ''}</Text>
-            <ScrollView>
+            <ScrollView keyboardShouldPersistTaps="handled">
               {(openMenu ? menuOptions[openMenu] : []).map((option) => {
                 const selected = option.value.toLowerCase() === currentValues[openMenu!].toLowerCase();
                 return (
@@ -138,7 +138,8 @@ export default function WritingToolbar({
                     onPress={() => selectOption(option.value)}
                     style={[styles.menuOption, selected && styles.menuOptionSelected]}
                   >
-                    <Text style={[styles.menuOptionText, selected && styles.menuOptionTextSelected]}>{option.label}</Text>
+                    {/* Feature: each font option previews its own typeface before applying it to the manuscript. */}
+                    <Text style={[styles.menuOptionText, openMenu === 'font' && { fontFamily: option.value }, selected && styles.menuOptionTextSelected]}>{option.label}</Text>
                     {selected && <Text style={styles.checkmark}>✓</Text>}
                   </Pressable>
                 );
@@ -151,13 +152,14 @@ export default function WritingToolbar({
   );
 }
 
-function PickerButton({ label, value, onPress, styles, compact = false }: {
-  label: string; value: string; onPress: () => void; styles: ReturnType<typeof makeStyles>; compact?: boolean;
+// Feature: dropdown labels and vector arrows share a centered row with an accessible expanded state.
+function PickerButton({ label, value, expanded, onPress, styles, color, compact = false }: {
+  label: string; value: string; expanded: boolean; onPress: () => void; styles: ReturnType<typeof makeStyles>; color: string; compact?: boolean;
 }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label + ': ' + value} onPress={onPress} style={[styles.pickerButton, compact && styles.pickerButtonCompact]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label + ': ' + value} accessibilityState={{ expanded }} onPress={onPress} style={[styles.pickerButton, compact && styles.pickerButtonCompact]}>
       <Text numberOfLines={1} style={styles.pickerLabel}>{value}</Text>
-      <Text style={styles.pickerChevron}>⌄</Text>
+      <DropdownChevron color={color} />
     </Pressable>
   );
 }
@@ -168,21 +170,21 @@ function AlignmentIcon({ alignment, active, styles }: { alignment: WritingAlignm
 }
 
 function makeStyles(theme: Theme, desktop: boolean) {
+  // Feature: quieter surfaces and consistent geometry keep writing actions visible without competing with the manuscript.
   return StyleSheet.create({
-    toolbarFrame: { flexShrink: 0, width: '100%', maxWidth: 1120, alignSelf: 'center', paddingHorizontal: desktop ? 26 : 12, marginTop: 0 },
+    toolbarFrame: { flexShrink: 0, width: '100%', alignSelf: 'center', paddingHorizontal: desktop ? 24 : 12, marginTop: 0, backgroundColor: theme.surface },
     // Feature: compact formatting expands only when a horizontal scrollbar needs room beneath the 44px controls.
-    toolbarScroll: { flexShrink: 0, minHeight: 66, borderWidth: 1, borderColor: theme.border, borderRadius: 12, backgroundColor: theme.surface },
+    toolbarScroll: { flexShrink: 0, minHeight: 66, backgroundColor: theme.surface },
     toolbar: { minHeight: 64, paddingVertical: 8, gap: desktop ? 8 : 6, paddingHorizontal: desktop ? 14 : 9, alignItems: 'center' },
     scrollHint: { fontSize: 12, lineHeight: 18, color: theme.muted, paddingTop: 4 },
     toolGroup: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    pickerButton: { height: 44, maxWidth: 180, minWidth: 58, paddingHorizontal: 10, borderWidth: 1, borderColor: theme.border, borderRadius: 9, backgroundColor: theme.background, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 7 },
-    pickerButtonCompact: { minWidth: 54, width: 58 },
-    pickerLabel: { color: theme.text, fontSize: 14, fontWeight: '600', maxWidth: 140 },
-    pickerChevron: { color: theme.muted, fontSize: 14, fontWeight: '700' },
+    pickerButton: { height: 44, maxWidth: 180, minWidth: 58, paddingHorizontal: 10, borderRadius: workspaceGeometry.controlRadius, backgroundColor: theme.background, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 7 },
+    pickerButtonCompact: { minWidth: 64, width: 64 },
+    pickerLabel: { color: theme.text, fontSize: 14, fontWeight: '600', maxWidth: 140, flexShrink: 1 },
     sizeStep: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
     sizeStepText: { color: theme.text, fontSize: 14, fontWeight: '700' },
     groupDivider: { width: 1, height: 30, backgroundColor: theme.border },
-    toolButton: { width: 44, height: 44, paddingHorizontal: 6, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+    toolButton: { width: 44, height: 44, paddingHorizontal: 6, borderRadius: workspaceGeometry.controlRadius, alignItems: 'center', justifyContent: 'center' },
     listButton: { minWidth: 54, height: 44, paddingHorizontal: 7, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
     toolButtonActive: { backgroundColor: theme.accentSoft },
     toolText: { color: theme.text, fontSize: 14, fontWeight: '700' },

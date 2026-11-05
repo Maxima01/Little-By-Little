@@ -1,17 +1,20 @@
+import { workspaceGeometry } from '../../../theme/theme';
 import type { ProsePreferences, TextAnchor } from '../../../domain/model';
 import type { RevisionTab } from './RevisionTools';
 import { anchorText, replaceHtmlText, type TextEdit } from '../lib/manuscriptOperations';
 import Pressable from '../../../components/AccessiblePressable';
 import { createElement, useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { ClipboardEvent, DragEvent, ReactNode } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import WritingToolbar, { type ToolbarAction } from './WritingToolbar';
+import WritingHeader from './WritingHeader';
 import ChapterContextPanel from './ChapterContextPanel';
 import ChapterPreview from './ChapterPreview';
 import WritingTools from './WritingTools';
 import { DEFAULT_WRITING_VIEW, WritingDeskControls, WritingDeskStatus } from './WritingDesk';
 import { manuscriptText } from '../lib/writingAnalysis';
 import { applyEditorTextEdit, editorTextSelection, selectEditorText, autoCapitalizeEditor } from '../lib/editorAssistance';
+import { cleanChapterHtml } from '../../workspace/lib/exportDocument';
 import type { Chapter, ChapterScene, Story, WritingAlignment, WritingBlockStyle, WritingFontFamily, WritingPreferences } from '../../../domain/model';
 import { countTextWords } from '../../../domain/model';
 import type { Theme } from '../../../theme/theme';
@@ -49,6 +52,8 @@ export default function RichEditor({ chapter, story, theme, desktop, saveState, 
   const contentRef = useRef<HTMLDivElement>(null);
   const selectionRef = useRef<Range | null>(null);
   const saveRef = useRef(onSaveHtml);
+  // Feature: acknowledge locally sanitized input without resetting its caret when React receives the saved HTML.
+  const savedHtmlRef = useRef<string | null>(null);
   const [title, setTitle] = useState(chapter.title);
   const [bodyText, setBodyText] = useState('');
   const [blockStyle, setBlockStyle] = useState<WritingBlockStyle>('Paragraph');
@@ -108,14 +113,27 @@ export default function RichEditor({ chapter, story, theme, desktop, saveState, 
     setBlockStyle('Paragraph');
     setAlignment('left');
     selectionRef.current = null;
-    if (contentRef.current) {
-      contentRef.current.innerHTML = chapter.html;
-      setBodyText(contentRef.current.innerText);
-    }
+    savedHtmlRef.current = null;
   }, [chapter.id]);
+  // Feature: every external chapter replacement, including cloud recovery of the same ID, crosses the HTML sanitizer.
+  useEffect(() => {
+    const editor = contentRef.current;
+    if (!editor || savedHtmlRef.current === chapter.html) return;
+    const safe = cleanChapterHtml(chapter.html);
+    if (editor.innerHTML !== safe.innerHTML) {
+      editor.replaceChildren(...Array.from(safe.childNodes));
+      selectionRef.current = null;
+    }
+    previousTextRef.current = manuscriptText(editor.innerHTML);
+    setBodyText(editor.innerText);
+  }, [chapter.id, chapter.html]);
   // Hands each edit to the shared crash journal immediately; only database commits are debounced.
   const saveNow = () => {
-    if (contentRef.current) saveRef.current(contentRef.current.innerHTML);
+    if (contentRef.current) {
+      const safeHtml = cleanChapterHtml(contentRef.current.innerHTML).innerHTML;
+      savedHtmlRef.current = safeHtml;
+      saveRef.current(safeHtml);
+    }
   };
   const onInput = (event?: { nativeEvent?: InputEvent }) => {
     if (correctingRef.current) return;
@@ -128,6 +146,17 @@ export default function RichEditor({ chapter, story, theme, desktop, saveState, 
     setBodyText(contentRef.current?.innerText ?? '');
     saveNow();
   };
+  // Feature: sanitize clipboard HTML before Chromium inserts it into the active document; text retains native undo.
+  const pasteSafely = (event: ClipboardEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const html = event.clipboardData.getData('text/html');
+    const text = event.clipboardData.getData('text/plain');
+    if (html.length > 10 * 1024 * 1024 || text.length > 10 * 1024 * 1024) return;
+    document.execCommand(html ? 'insertHTML' : 'insertText', false, html ? cleanChapterHtml(html).innerHTML : text);
+    onInput();
+  };
+  // Feature: block native drag/drop insertion and file navigation, which bypass the safe clipboard path.
+  const preventUnsafeDrop = (event: DragEvent<HTMLDivElement>) => event.preventDefault();
   // Captures the saved DOM selection before opening a revision dialog.
   const captureSelection = () => contentRef.current ? editorTextSelection(contentRef.current, selectionRef.current ?? undefined) : undefined;
   // Restores manuscript focus after the writing-tools modal has released its focus trap.
@@ -207,19 +236,8 @@ export default function RichEditor({ chapter, story, theme, desktop, saveState, 
 
   return (
     <View style={styles.root}>
-      <View style={styles.topbar}>
-        {!focusMode && navigationControl}
-        <Pressable accessibilityRole="button" onPress={onBack} style={styles.backButton}><Text style={styles.backText}>‹  Story</Text></Pressable>
-        <View style={styles.topbarStory}>
-          <Text numberOfLines={1} style={styles.eyebrow}>{story.title} / Chapter {chapterNumber}</Text>
-          <TextInput value={title} onChangeText={changeTitle} onBlur={() => onTitleChange(title.trim() || 'Untitled chapter')} style={styles.titleInput} accessibilityLabel="Chapter title" />
-        </View>
-        <View style={styles.topbarActions}>
-          <Pressable accessibilityLabel={focusMode ? 'Exit focus mode' : 'Enter focus mode'} accessibilityState={{ selected: focusMode }} onPress={() => changeFocusMode(!focusMode)} style={[styles.previewButton, focusMode && { backgroundColor: theme.accentSoft }]}><Text style={styles.previewButtonText}>{focusMode ? 'Exit focus' : 'Focus'}</Text></Pressable>
-          {!focusMode && <Pressable accessibilityLabel="Export manuscript" onPress={onExport} style={styles.previewButton}><Text style={styles.previewButtonText}>Export</Text></Pressable>}
-          <Pressable accessibilityRole="button" onPress={() => setPreviewOpen(true)} style={styles.previewButton}><Text style={styles.previewButtonText}>Preview</Text></Pressable>
-        </View>
-      </View>
+      <WritingHeader theme={theme} desktop={desktop} title={title} storyTitle={story.title} chapterNumber={chapterNumber} focusMode={focusMode} navigationControl={navigationControl}
+        onTitleChange={changeTitle} onTitleCommit={() => onTitleChange(title.trim() || 'Untitled chapter')} onBack={onBack} onFocusModeChange={changeFocusMode} onExport={onExport} onPreview={() => setPreviewOpen(true)} />
       {!focusMode && <WritingDeskControls theme={theme} view={writingView} onView={setWritingView} contextOpen={showContext} onContext={onContextToggle} onTools={() => setToolsOpen(true)} onRevision={(tab) => onRevisionOpen(captureSelection(), tab)} />}
       {!focusMode && writingView.formatting && <WritingToolbar
         theme={theme} desktop={desktop} blockStyle={blockStyle} fontFamily={fontFamily} fontSize={fontSize}
@@ -249,6 +267,9 @@ export default function RichEditor({ chapter, story, theme, desktop, saveState, 
             spellCheck: true,
             style: { fontFamily, fontSize: fontSize + 'px', lineHeight: writingView.spacing },
             onInput,
+            onPaste: pasteSafely,
+            onDragOver: preventUnsafeDrop,
+            onDrop: preventUnsafeDrop,
             onBlur: saveNow,
           })}
           </View>
@@ -270,20 +291,17 @@ export default function RichEditor({ chapter, story, theme, desktop, saveState, 
 }
 
 // Fits the document canvas and keeps optional assistance controls usable on narrow screens.
+// Feature: a quiet, square manuscript surface distinguishes prose from the surrounding controls.
 function makeStyles(theme: Theme, desktop: boolean) {
   return StyleSheet.create({
     documentLabel: { color: theme.muted, fontSize: 13, marginBottom: 24 },
     root: { flex: 1, minHeight: 0, backgroundColor: theme.background },
-    topbar: { flexWrap: 'wrap', paddingVertical: 8, minHeight: 64, flexShrink: 0, marginHorizontal: desktop ? 18 : 9, marginTop: desktop ? 10 : 8, paddingHorizontal: desktop ? 18 : 14, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
-    backButton: { minHeight: 44, justifyContent: 'center', paddingVertical: 9, paddingHorizontal: 8 }, backText: { color: theme.accent, fontSize: 14, fontWeight: '700' },
-    topbarStory: { flex: 1, minWidth: 90 }, eyebrow: { color: theme.muted, fontSize: 12 },
-    titleInput: { color: theme.text, fontSize: 15, fontWeight: '700', padding: 0, marginTop: 3 },
     saveBadge: { flexDirection: 'row', gap: 7, alignItems: 'center' }, saveDot: { height: 7, width: 7, borderRadius: 4, backgroundColor: theme.secondary }, saveText: { color: theme.muted, fontSize: 14 },
-    topbarActions: { flexDirection: 'row', alignItems: 'center', gap: 6 }, previewButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: theme.border }, previewButtonText: { color: theme.accent, fontSize: 14, fontWeight: '700' },
+    previewButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: theme.border }, previewButtonText: { color: theme.accent, fontSize: 14, fontWeight: '700' },
     pageArea: { flexGrow: 1, alignItems: 'center', padding: desktop ? 26 : 12, paddingBottom: 40 },
     assistanceBar: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingHorizontal: desktop ? 26 : 12, paddingTop: 10 },
     documentWorkspace: { width: '100%', maxWidth: 1120, alignSelf: 'center', gap: 16 },
-    paper: { width: '100%', maxWidth: 790, minHeight: desktop ? 760 : 580, paddingHorizontal: desktop ? 64 : 24, paddingTop: desktop ? 48 : 28, paddingBottom: 70, backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1, borderRadius: 12 },
+    paper: { width: '100%', maxWidth: 790, minHeight: desktop ? 760 : 580, paddingHorizontal: desktop ? 64 : 24, paddingTop: desktop ? 48 : 28, paddingBottom: 70, backgroundColor: theme.surface, borderRadius: workspaceGeometry.pageRadius },
     contextOverlay: { flex: 1, padding: 12, backgroundColor: 'rgba(18,16,21,0.34)', alignItems: 'flex-end', justifyContent: 'center' },
     contextDrawer: { width: '100%', maxWidth: 420, maxHeight: '92%', padding: 12, borderRadius: 16, backgroundColor: theme.surface, gap: 10 },
     contextHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },

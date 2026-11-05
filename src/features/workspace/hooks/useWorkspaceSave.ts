@@ -12,6 +12,8 @@ import { backupWorkspace } from '../lib/externalBackup';
 // workspaceRef is the latest edit; revisionRef prevents an older completed save from clearing newer dirty state.
 export function useWorkspaceSave() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  // Feature: cloud sync observes only snapshots whose local storage write has completed.
+  const [committedWorkspace, setCommittedWorkspace] = useState<Workspace | null>(null);
   const workspaceRef = useRef<Workspace | null>(null);
   const lastCommittedRef = useRef<Workspace | null>(null);
   const revisionRef = useRef(0);
@@ -43,12 +45,14 @@ export function useWorkspaceSave() {
     try {
       const result = await writeWorkspace(current, options);
       lastCommittedRef.current = current;
+      if (mountedRef.current) setCommittedWorkspace(current);
       if (mountedRef.current && revision === revisionRef.current) {
         dirtyRef.current = false;
         setLastSavedAt(result.savedAt);
         setSaveState('Saved on this device');
         setSaveError('');
       }
+      return current;
     } catch (error) {
       if (mountedRef.current && revision === revisionRef.current) {
         setSaveState('Save failed · changes still open');
@@ -82,6 +86,7 @@ export function useWorkspaceSave() {
       if (!mountedRef.current) return;
       workspaceRef.current = loaded.workspace;
       lastCommittedRef.current = loaded.workspace;
+      setCommittedWorkspace(loaded.workspace);
       setWorkspace(loaded.workspace);
       setLastSavedAt(loaded.savedAt);
       setRecoveryMessage(loaded.recoveryMessage);
@@ -95,15 +100,25 @@ export function useWorkspaceSave() {
   }, []);
 
   // Restores only after saving the current draft; the pre-restore checkpoint makes this reversible.
-  const restore = useCallback(async (next: Workspace) => {
+  const restore = useCallback(async (next: Workspace, expected?: Workspace, isCurrent?: () => boolean) => {
+    // Feature: incoming cloud copies cannot replace edits made after their sync check.
+    if (expected && (workspaceRef.current !== expected || isCurrent?.() === false)) throw new Error('Your local workspace changed. Sync again to review the latest copies.');
     clearTimers();
     const previous = workspaceRef.current;
     if (previous) await saveNow();
+    if (expected && (workspaceRef.current !== expected || isCurrent?.() === false)) throw new Error('You continued editing while sync was saving. Your local edits are kept; sync again.');
     const restored = { ...next, updatedAt: new Date().toISOString() };
     const result = await replaceWorkspace(restored, previous ?? undefined);
+    if (expected && (workspaceRef.current !== expected || isCurrent?.() === false)) {
+      // Preserve the received cloud snapshot in history and re-commit the newer open draft.
+      await saveNow({ preservePrevious: { label: 'Cloud copy received while editing', workspace: restored } });
+      throw new Error('You continued editing while the cloud copy arrived. Your edits are kept; sync again.');
+    }
+    clearTimers();
     revisionRef.current += 1;
     workspaceRef.current = restored;
     lastCommittedRef.current = restored;
+    setCommittedWorkspace(restored);
     setWorkspace(restored);
     dirtyRef.current = false;
     setSaveError('');
@@ -189,5 +204,5 @@ export function useWorkspaceSave() {
     return () => clearInterval(interval);
   }, []);
 
-  return { workspace, workspaceRef, persist, saveNow, restore, recoverChapter, replaceMatches, saveState, saveError, loadError, recoveryMessage, lastSavedAt, retryLoad, dismissRecovery: () => setRecoveryMessage('') };
+  return { workspace, committedWorkspace, workspaceRef, persist, saveNow, restore, recoverChapter, replaceMatches, saveState, saveError, loadError, recoveryMessage, lastSavedAt, retryLoad, dismissRecovery: () => setRecoveryMessage('') };
 }

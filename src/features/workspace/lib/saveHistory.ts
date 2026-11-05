@@ -1,4 +1,5 @@
 import { createId, createStarterWorkspace, type Workspace } from '../../../domain/model.ts';
+import { isWritingFontFamily } from '../../../domain/writingFonts.ts';
 import { isCharacterProfile } from '../../characters/lib/characterProfile.ts';
 import { isWorldProfile } from '../../world/lib/worldProfile.ts';
 
@@ -56,7 +57,8 @@ export function isWorkspace(value: unknown): value is Workspace {
     if (story.sessionGoal !== undefined && (!object(story.sessionGoal) || !positive(story.sessionGoal.target) || !Number.isInteger(story.sessionGoal.baseline) || (story.sessionGoal.baseline as number) < 0 || !date(story.sessionGoal.startedAt))) return false;
     if (!story.chapters.every((chapter) => {
       if (!identified(chapter) || !text(chapter.html) || !date(chapter.updatedAt)) return false;
-      if (chapter.fontFamily !== undefined && !['Georgia', 'Arial', 'Courier New'].includes(chapter.fontFamily as string)) return false;
+      // Feature: every catalog font survives autosave, checkpoint recovery and backup imports.
+      if (chapter.fontFamily !== undefined && !isWritingFontFamily(chapter.fontFamily)) return false;
       if (chapter.fontSize !== undefined && (typeof chapter.fontSize !== 'number' || !Number.isFinite(chapter.fontSize) || chapter.fontSize < 6 || chapter.fontSize > 96)) return false;
       if (chapter.activeSceneId !== undefined && !text(chapter.activeSceneId)) return false;
       if (chapter.passageTasks !== undefined && (!Array.isArray(chapter.passageTasks) || !chapter.passageTasks.every((task) => object(task) && text(task.id) && !!task.id && text(task.note) && anchor(task.anchor) && typeof task.completed === 'boolean' && date(task.createdAt)) || !unique(chapter.passageTasks))) return false;

@@ -1,6 +1,7 @@
 import { AlignmentType, Document, ExternalHyperlink, HeadingLevel, LevelFormat, Packer, Paragraph, TextRun } from 'docx';
 import JSZip from 'jszip';
 import type { Story } from '../../../domain/model.ts';
+import { isWritingFontFamily } from '../../../domain/writingFonts.ts';
 
 export type ExportFormat = 'pdf' | 'epub' | 'docx' | 'md' | 'txt' | 'html';
 export const EXPORT_FORMATS: { id: ExportFormat; title: string; detail: string }[] = [
@@ -32,11 +33,13 @@ function safeLink(value: string) {
 
 // Removes active content from pasted/imported HTML while retaining supported writing styles.
 export function cleanChapterHtml(html: string): HTMLElement {
+  // Feature: parse untrusted saves in an inert template so media and custom elements never activate before filtering.
+  const template = document.createElement('template');
+  template.innerHTML = html;
   const root = document.createElement('div');
-  root.innerHTML = html;
   const allowed = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'UL', 'OL', 'LI', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'S', 'SPAN', 'A', 'PRE', 'CODE']);
   // Walks descendants from leaves upward so replacement cannot skip unsafe children.
-  for (let element of Array.from(root.querySelectorAll('*')).reverse()) {
+  for (let element of Array.from(template.content.querySelectorAll('*')).reverse()) {
     if (['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'SVG', 'MATH', 'NOSCRIPT', 'TEMPLATE'].includes(element.tagName)) { element.remove(); continue; }
     if (element.tagName === 'FONT' || element.tagName === 'STRIKE') {
       const replacement = document.createElement(element.tagName === 'STRIKE' ? 's' : 'span');
@@ -55,7 +58,8 @@ export function cleanChapterHtml(html: string): HTMLElement {
     if (styles.fontStyle === 'italic') declarations.push('font-style:italic');
     if (/^(underline|line-through)( (underline|line-through))?$/.test(styles.textDecorationLine || styles.textDecoration)) declarations.push(`text-decoration:${styles.textDecorationLine || styles.textDecoration}`);
     const font = styles.fontFamily.replace(/["']/g, '');
-    if (['Georgia', 'Arial', 'Courier New'].includes(font)) declarations.push(`font-family:${font}`);
+    // Feature: retain the expanded writing font catalog in safe HTML, EPUB and editable Word runs.
+    if (isWritingFontFamily(font)) declarations.push(`font-family:${font}`);
     if (/^\d+(\.\d+)?(px|pt)$/.test(styles.fontSize) && parseFloat(styles.fontSize) <= 128) declarations.push(`font-size:${styles.fontSize}`);
     const href = element.tagName === 'A' ? safeLink(element.getAttribute('href') ?? '') : undefined;
     const start = element.tagName === 'OL' ? element.getAttribute('start') : undefined;
@@ -64,6 +68,7 @@ export function cleanChapterHtml(html: string): HTMLElement {
     if (href) element.setAttribute('href', href);
     if (start && /^\d{1,5}$/.test(start)) element.setAttribute('start', start);
   }
+  root.append(template.content);
   return root;
 }
 
@@ -137,7 +142,11 @@ export function storyText(story: Story, markdown = false): string {
     if (run.bold) value = `**${value}**`;
     if (run.italic) value = `*${value}*`;
     if (run.strike) value = `~~${value}~~`;
-    if (run.href) value = `[${value}](${run.href.replace(/[()]/g, (char) => encodeURIComponent(char))})`;
+    if (run.href) {
+      // Feature: keep whitespace and raw HTML delimiters inside the Markdown link destination.
+      const destination = run.href.replace(/[\u0000-\u0020\u007f<>()\\`]/g, (char) => `%${char.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase()}`);
+      value = `[${value}](${destination})`;
+    }
     return leading + value + trailing;
   };
   return [markdown ? `# ${escapeText(story.title)}` : story.title, ...story.chapters.map((chapter) => {

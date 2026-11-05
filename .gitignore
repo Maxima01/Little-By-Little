@@ -12,3 +12,10 @@ release/
 /audits/
 /UX_IMPROVEMENT_PLAN.md
 /DESIGN_CANVAS.md
+# Feature: keep credentials in every environment variant out of Git while retaining the public template.
+.env
+.env.*
+!.env.example
+
+# Generated website design measurements and browser screenshots stay local.
+.taste-skill/

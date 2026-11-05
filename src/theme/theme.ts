@@ -1,3 +1,6 @@
+// Feature: shared workspace geometry distinguishes quiet controls, floating dialogs, and manuscript pages.
+export const workspaceGeometry = { controlRadius: 5, panelRadius: 8, pageRadius: 2, sidebarWidth: 260 };
+
 export const lightTheme = {
   mode: 'light' as const,
   background: '#FAF7F2',

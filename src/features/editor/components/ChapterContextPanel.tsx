@@ -1,4 +1,6 @@
+import { workspaceGeometry } from '../../../theme/theme';
 import Pressable from '../../../components/AccessiblePressable';
+import DropdownChevron from '../../../components/DropdownChevron';
 import { useMemo, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { createScene, type Chapter, type ChapterScene, type Story } from '../../../domain/model';
@@ -60,18 +62,19 @@ export default function ChapterContextPanel({ chapter, story, theme, inDrawer = 
         {sceneOrder.map((scene, index) => <Pressable key={scene.id} accessibilityRole="button" accessibilityLabel={'Set current scene to ' + scene.title} accessibilityState={{ selected: scene.id === activeScene.id }} onPress={() => selectScene(scene)} style={[styles.sceneTab, scene.id === activeScene.id && styles.sceneTabActive]}><Text numberOfLines={1} style={[styles.sceneTabText, scene.id === activeScene.id && styles.sceneTabTextActive]}>{index + 1}. {scene.title}</Text></Pressable>)}
         <Pressable accessibilityRole="button" accessibilityLabel="Add scene" onPress={addScene} style={styles.addScene}><Text style={styles.addSceneText}>＋</Text></Pressable>
       </ScrollView>
-      <Text style={styles.fieldLabel}>CURRENT SCENE</Text>
+      <Text style={styles.fieldLabel}>Current scene</Text>
       <TextInput accessibilityLabel="Scene name" value={activeScene.title} onChangeText={(title) => updateScene({ title })} placeholder="Name this scene" placeholderTextColor={theme.muted} style={styles.sceneName} />
       {/* Feature: scene metadata and manuscript counts stay visible while drafting. */}
       <Text style={styles.helper}>{activeRange?.words === undefined ? 'Scene passage not linked' : `${activeRange.words} scene words`}{activeScene.viewpoint ? ` · Viewpoint: ${activeScene.viewpoint}` : ''}</Text>
       {!!activeScene.synopsis && <Text style={styles.helper}>{activeScene.synopsis}</Text>}
       {onOutline && <Pressable accessibilityRole="button" onPress={onOutline} style={styles.settingButton}><Text style={styles.settingValue}>Edit outline / link passage</Text></Pressable>}
-      <Text style={styles.fieldLabel}>SETTING</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel="Choose scene setting" onPress={() => setSettingPickerOpen(true)} style={styles.settingButton}>
-        <Text numberOfLines={1} style={styles.settingValue}>{settings.find((setting) => setting.id === activeScene.settingId)?.title ?? 'Choose a setting'}</Text><Text style={styles.chevron}>⌄</Text>
+      <Text style={styles.fieldLabel}>Setting</Text>
+      {/* Feature: scene-setting dropdowns share the toolbar's centered, scalable arrow. */}
+      <Pressable accessibilityRole="button" accessibilityLabel="Choose scene setting" accessibilityState={{ expanded: settingPickerOpen }} onPress={() => setSettingPickerOpen(true)} style={styles.settingButton}>
+        <Text numberOfLines={1} style={styles.settingValue}>{settings.find((setting) => setting.id === activeScene.settingId)?.title ?? 'Choose a setting'}</Text><DropdownChevron color={theme.muted} />
       </Pressable>
       {!settings.length && <Text style={styles.helper}>Add a place in World Building to assign it here.</Text>}
-      <Text style={styles.fieldLabel}>CHARACTERS PRESENT</Text>
+      <Text style={styles.fieldLabel}>Characters present</Text>
       {story.characters.length ? <View style={styles.characterList}>{story.characters.map((character) => {
         const selected = activeScene.characterIds.includes(character.id);
         return <Pressable key={character.id} accessibilityRole="checkbox" accessibilityState={{ checked: selected }} onPress={() => updateScene({ characterIds: selected ? activeScene.characterIds.filter((id) => id !== character.id) : [...activeScene.characterIds, character.id] })} style={[styles.characterChip, selected && styles.characterChipActive]}><Text style={[styles.characterChipText, selected && styles.characterChipTextActive]}>{selected ? '✓  ' : '+  '}{character.title}</Text></Pressable>;
@@ -139,8 +142,9 @@ function settingsForScene(story: Story, settingId: string | null) {
 
 // Styles the scene controls and compact, expandable chapter tracking summaries.
 function makeStyles(theme: Theme) {
+  // Feature: quieter surfaces and consistent geometry keep writing actions visible without competing with the manuscript.
   return StyleSheet.create({
-    panel: { width: '100%', maxWidth: 300, alignSelf: 'stretch', padding: 16, borderRadius: 16, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, gap: 10 },
+    panel: { width: '100%', maxWidth: 300, alignSelf: 'stretch', padding: 16, backgroundColor: theme.background, gap: 12 },
     headingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
     heading: { color: theme.text, fontSize: 14, fontWeight: '700' },
     subtitle: { color: theme.muted, fontSize: 12, lineHeight: 20, marginTop: 4 },
@@ -154,14 +158,14 @@ function makeStyles(theme: Theme) {
     sceneTabTextActive: { color: theme.accent, fontWeight: '700' },
     addScene: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 9, borderWidth: 1, borderColor: theme.border },
     addSceneText: { color: theme.accent, fontSize: 15, fontWeight: '600' },
-    fieldLabel: { color: theme.muted, fontSize: 12, letterSpacing: 0.9, fontWeight: '800', marginTop: 2 },
+    fieldLabel: { color: theme.muted, fontSize: 13, fontWeight: '600', marginTop: 8 },
     sceneName: { color: theme.text, fontSize: 14, paddingHorizontal: 10, paddingVertical: 9, borderRadius: 9, borderWidth: 1, borderColor: theme.border },
     settingButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingHorizontal: 10, borderRadius: 9, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.background },
     settingValue: { flex: 1, color: theme.text, fontSize: 14 },
     chevron: { color: theme.muted, fontSize: 14 },
     helper: { color: theme.muted, fontSize: 12, lineHeight: 20 },
     characterList: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-    characterChip: { paddingHorizontal: 9, paddingVertical: 7, borderRadius: 10, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.background },
+    characterChip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 10, paddingVertical: 8, borderRadius: workspaceGeometry.controlRadius, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface },
     characterChipActive: { borderColor: theme.accent, backgroundColor: theme.accentSoft },
     characterChipText: { color: theme.muted, fontSize: 14 },
     characterChipTextActive: { color: theme.accent, fontWeight: '700' },

@@ -2,7 +2,8 @@
 
 A desktop-first, offline-friendly story writing workspace. React Native and Expo keep the experience portable; Electron opens the desktop app, while the same project can run in a browser or on mobile.
 
-Currently in its Offline Version (Will add Cloud Saves and Synchronization in all three platforms)
+<!-- Feature: optional Supabase sync connects the same workspace across desktop, web, and mobile. -->
+Offline local saving is available on every platform, with optional Supabase cloud saves and synchronization through a signed-in account.
 
 For contributors, [the source guide](./src/README.md) maps the entry points, feature folders, save pipeline, and platform-specific implementations.
 
@@ -27,6 +28,18 @@ npm run web         # Browser version
 npm run start:expo  # Expo tools for devices and emulators
 npm run desktop:preview # Build the web renderer and open it in Electron
 ```
+
+<!-- Feature: dedicated public browser routes introduce the app and recover missing pages. -->
+The browser version opens a landing page at `/`; **Open writing desk** opens the workspace at `/app`. Unknown browser paths show the custom 404 page. Electron and native platforms continue opening the workspace directly.
+
+Build and serve the production website locally:
+
+```sh
+npm run build:web
+npm run serve:web
+```
+
+Open `http://127.0.0.1:8093`. The production server serves only known documents and exported assets, returns real 404 status codes, and sets security headers. Expo's development server is for development. For public deployment, use HTTPS with a reverse proxy and edge request limits; set `HOST` and `PORT` explicitly when required. Keep the server's `EXPO_PUBLIC_SUPABASE_URL` identical to the build's value so its Content Security Policy permits the configured project. Static hosts need equivalent headers and 404 handling; see [SECURITY.md](./SECURITY.md).
 
 `npm start` and `npm run web` use the local Expo development server. `desktop:preview` builds the renderer and loads it from disk, matching the packaged app's offline startup path. New dictionary lookups still need a network connection.
 
@@ -65,7 +78,7 @@ Packaging creates `.desktop-package/` and `release/`; both are ignored by Git. `
 - Saved/current chapter comparisons and recovery of individual drafts or passages.
 - Light and dark palettes that follow the operating system; the light palette uses soft pastels.
 
-Stories are stored on this device: IndexedDB on desktop and web, and AsyncStorage on mobile. There is no account, server, or cross-device sync in this initial build.
+Stories are stored on this device: IndexedDB on desktop and web, and AsyncStorage on mobile. Optional account-based cloud synchronization is available when Supabase is configured.
 
 <!-- Feature: manuscript-first layouts, remembered context choices, reliable navigation and readable controls. -->
 **Start my story** creates a personal story and opens its first blank chapter immediately. Starter content is labeled **Example story**, and missing titles get inline feedback. The manuscript appears first, with context beside it when the available canvas is at least 1040 px wide. Narrow screens start with context collapsed; **Show context** opens a drawer. Wide visibility and narrow expansion are remembered independently in workspace backups and across chapter changes, recovery and reload.
@@ -184,3 +197,31 @@ Open **Automatic backups** below the workspace toolbar to see the folder, last c
 If the destination is unavailable, local saves continue. The app retries the last successfully committed workspace every minute while open and on later saves. A normal desktop quit waits for backup writes already in progress. For device-loss protection, select an external drive or a cloud-synced folder; the default Documents folder alone is still on this computer, and cloud upload is handled by the writer's sync application.
 
 To recover, choose **Open folder**, then **Import backup**, select the latest JSON file or a dated copy, review it and choose **Restore workspace**. If local storage is empty and a surviving or previously configured backup is detected, the app shows recovery guidance instead of replacing the external copy with a starter workspace. Changing folders does not delete backups from the old destination. Backup preferences are specific to this installation and are not included in portable workspace files.
+
+<!-- Feature: Supabase account-owned cloud saves extend offline local persistence with guarded whole-workspace sync. -->
+## Cloud saves and sync
+
+<!-- Feature: public account entry is optional, allowing free guest drafts to remain local until cloud sync is chosen. -->
+The browser landing page offers **Create a story for free**, **Sign in**, and **Register**. You can start writing and return to the account form later; the same browser keeps its local stories after sign-in. The first cloud transfer still requires the workspace choice below. Optional bot verification setup is documented in [SECURITY.md](SECURITY.md).
+
+Open **Workspace → Cloud saves**, create an account or sign in with email and password, and confirm your email when requested. On the first device, choose **Start cloud sync** to upload its workspace. On another device, sign in to the same account and choose **Use cloud workspace** to bring that library onto the device. Your stories, chapters, supporting collections, and writing preferences travel together; local version history and backup-folder settings stay on each device.
+
+Writing and local autosave continue offline. While signed in with sync enabled, the app uploads successful local saves and checks for cloud changes in the background. **Sync now** checks immediately. **Pause sync** stops cloud transfers; **Sign out** disconnects the account and leaves its current stories saved on the device.
+
+Sync works on the entire workspace. If both copies changed, the app asks which copy to use instead of merging manuscript text automatically. **Use cloud workspace** replaces the device library and preserves the preceding device workspace in **Version history**. **Use this device’s workspace** replaces the cloud library, so download a backup first if you need to retain both versions. Server revisions prevent a stale device from silently overwriting a newer upload.
+
+### Supabase setup
+
+Cloud configuration is optional. Copy [.env.example](.env.example) to `.env` and supply the intended project's API URL and **publishable** key:
+
+```dotenv
+EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_YOUR_KEY
+```
+
+Install dependencies with `npm install`, then restart Expo or rebuild the desktop app after changing these values. With no configuration, local writing remains available and the Cloud saves panel explains that cloud sync needs setup. Never place a secret or service-role key in an `EXPO_PUBLIC_` variable.
+
+<!-- Feature: private database storage and authenticated RPCs enforce account ownership, revision checks and quotas. -->
+Run [supabase/schema.sql](supabase/schema.sql) in the intended project's SQL Editor for a fresh installation or an upgrade of the original cloud schema. It retains existing workspaces while moving storage into a private schema, removes direct client table privileges, and exposes authenticated owner-scoped read/save RPCs with revision checks, payload limits and request quotas. Back up cloud data and follow [supabase/README.md](supabase/README.md) before upgrading. Release the matching clients together; older direct-table clients must be updated. The upgrade was applied to the configured **Little by Little** project on 2026-11-03; live database and public API checks are recorded in [supabase/DEPLOYMENT.md](supabase/DEPLOYMENT.md).
+
+Email/password authentication uses Supabase Auth. Configure the project's email confirmation and email delivery settings in the Supabase dashboard for the people who will use the app. The desktop app signs in directly and does not depend on an OAuth callback or a browser redirect.

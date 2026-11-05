@@ -1,3 +1,4 @@
+import { workspaceGeometry } from '../theme/theme';
 import Pressable from '../components/AccessiblePressable';
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -39,6 +40,7 @@ import {
   type WritingPreferences,
 } from '../domain/model';
 import { useWorkspaceSave } from '../features/workspace/hooks/useWorkspaceSave';
+import { useCloudSync } from '../features/workspace/hooks/useCloudSync';
 import WorkspaceTools from '../features/workspace/components/WorkspaceTools';
 import ExportDialog from '../features/workspace/components/ExportDialog';
 import CharacterWorkspace from '../features/characters/components/CharacterWorkspace';
@@ -66,7 +68,7 @@ export default function App() {
   const { width } = useWindowDimensions();
   const desktop = width >= 900;
   const theme = scheme === 'dark' ? darkTheme : lightTheme;
-  const { workspace, workspaceRef, persist, saveNow, restore, recoverChapter, replaceMatches, saveState, saveError, loadError, recoveryMessage, lastSavedAt, retryLoad, dismissRecovery } = useWorkspaceSave();
+  const { workspace, committedWorkspace, workspaceRef, persist, saveNow, restore, recoverChapter, replaceMatches, saveState, saveError, loadError, recoveryMessage, lastSavedAt, retryLoad, dismissRecovery } = useWorkspaceSave();
   // Feature: one revision workspace shares the captured passage and navigates back to real manuscript text.
   const [revisionOpen, setRevisionOpen] = useState(false);
   const [revisionTab, setRevisionTab] = useState<RevisionTab>('find');
@@ -91,7 +93,7 @@ export default function App() {
   const [writingFocus, setWritingFocus] = useState(false);
   const focusMode = screen === 'editor' && writingFocus;
   // Feature: story panels stack when the open navigator leaves too little room for side-by-side content.
-  const spaciousContent = width - (desktop && sidebarOpen && !focusMode ? 278 : 0) >= 900;
+  const spaciousContent = width - (desktop && sidebarOpen && !focusMode ? workspaceGeometry.sidebarWidth : 0) >= 900;
   const styles = makeStyles(theme, desktop, spaciousContent);
   useEffect(() => { if (screen !== 'editor') setWritingFocus(false); }, [screen]);
   const [activeStoryId, setActiveStoryId] = useState<string | null>(null);
@@ -290,13 +292,15 @@ export default function App() {
   };
 
   // Resets navigation after recovery so editor instances cannot write over restored chapters.
-  const restoreAndNavigate = async (next: Workspace) => {
-    await restore(next);
+  const restoreAndNavigate = async (next: Workspace, expected?: Workspace, isCurrent?: () => boolean) => {
+    await restore(next, expected, isCurrent);
     setActiveStoryId(null); setActiveChapterId(null); setActiveEntryId(null); setScreen('library');
   };
-  const workspaceTools = <WorkspaceTools theme={theme} workspace={workspace} saveState={saveState} lastSavedAt={lastSavedAt} onSave={() => saveNow({ checkpoint: 'Manual checkpoint' })} onRestore={restoreAndNavigate} onRecoverChapter={async (request) => { try { await recoverChapter(request); } finally { setEditorRevision((value) => value + 1); } }} />;
+  // Feature: cloud replacement shares checkpointed recovery and closes stale editor instances.
+  const cloud = useCloudSync({ workspaceRef, committedWorkspace, saveNow, applyRemote: restoreAndNavigate });
+  const workspaceTools = <WorkspaceTools cloud={cloud} theme={theme} workspace={workspace} saveState={saveState} lastSavedAt={lastSavedAt} onSave={() => saveNow({ checkpoint: 'Manual checkpoint' })} onRestore={restoreAndNavigate} onRecoverChapter={async (request) => { try { await recoverChapter(request); } finally { setEditorRevision((value) => value + 1); } }} />;
   // Feature: context uses available canvas width and persists explicit choices across editor remounts.
-  const contextBeside = width - (desktop && sidebarOpen && !focusMode ? 278 : 0) >= 1040;
+  const contextBeside = width - (desktop && sidebarOpen && !focusMode ? workspaceGeometry.sidebarWidth : 0) >= 1040;
   const contextKey = contextBeside ? 'wide' : 'narrow';
   const contextOpen = workspace?.contextVisibility?.[contextKey] ?? contextBeside;
   const toggleContext = () => {
@@ -483,7 +487,7 @@ function Sidebar({ theme, styles, stories, activeStoryId, activeChapterId, activ
         })}
       </ScrollView>
       <View style={styles.sidebarFooter}>
-        <View style={styles.avatar}><Text style={styles.avatarText}>A</Text></View>
+        <View style={styles.projectDot} />
         <View style={styles.profileCopy}><Text style={styles.profileName}>Your workspace</Text><Text style={styles.profileStatus}>Local writing & backups</Text></View>
       </View>
     </View>
@@ -491,7 +495,8 @@ function Sidebar({ theme, styles, stories, activeStoryId, activeChapterId, activ
 }
 
 function NavRow({ label, icon, active, onPress, styles }: { label: string; icon: string; active: boolean; onPress: () => void; styles: ReturnType<typeof makeStyles> }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: active }} onPress={onPress} style={[styles.navRow, active && styles.navRowActive]}><Text style={[styles.navIcon, active && styles.navIconActive]}>{icon}</Text><Text style={[styles.navLabel, active && styles.navLabelActive]}>{label}</Text></Pressable>;
+  // Feature: text-led navigation removes decorative glyphs while preserving every named destination and selected state.
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: active }} onPress={onPress} style={[styles.navRow, active && styles.navRowActive]}><Text style={[styles.navLabel, active && styles.navLabelActive]}>{label}</Text></Pressable>;
 }
 
 function LibraryScreen({ theme, styles, stories, saveState, navigationControl, onNewStory, onOpenStory, onOpenChapter, onDeleteStory }: {
@@ -514,12 +519,11 @@ function LibraryScreen({ theme, styles, stories, saveState, navigationControl, o
               return (
                 <View key={story.id} style={styles.storyCard}>
                   <Pressable accessibilityRole="button" onPress={() => onOpenStory(story)} style={styles.storyCardOpen}>
-                    <View style={styles.storyCardTop}><View style={styles.storyCardMark}><Text style={styles.storyCardMarkText}>✎</Text></View><Text style={styles.cardArrow}>↗</Text></View>
-                    {isExampleStory(story) && <Text style={styles.exampleLabel}>Example story</Text>}
+                    {/* Feature: manuscript rows prioritize each story title and progress over decorative cover cards. */}
                     <Text numberOfLines={2} style={styles.storyCardTitle}>{story.title}</Text>
                     <Text numberOfLines={2} style={styles.storyCardDescription}>{story.description || 'A new story waiting to be written.'}</Text>
                     <View style={styles.storyStats}><Text style={styles.statText}>{story.chapters.length} chapters</Text><Text style={styles.statText}>{words.toLocaleString()} words</Text></View>
-                    {isExampleStory(story) && <Text style={styles.exampleLabel}>Explore the example</Text>}
+                    {isExampleStory(story) && <Text style={styles.exampleLabel}>Example story · explore the workspace</Text>}
                   </Pressable>
                   <Pressable accessibilityRole="button" onPress={() => onDeleteStory(story)} style={styles.storyDelete}><Text style={styles.storyDeleteText}>Delete story</Text></Pressable>
                 </View>
@@ -752,53 +756,54 @@ function singularSection(section: SectionKey) {
 
 
 function makeStyles(theme: Theme, desktop: boolean, spaciousContent: boolean) {
+  // Feature: quieter surfaces and consistent geometry keep writing actions visible without competing with the manuscript.
   return StyleSheet.create({
     shell: { flex: 1, flexDirection: 'row', backgroundColor: theme.background },
     loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: theme.background },
     main: { flex: 1, minWidth: 0, position: 'relative' },
     recoveryNotice: { padding: 12, backgroundColor: theme.secondarySoft, color: theme.text, fontSize: 14, lineHeight: 18 },
-    sidebarToggle: { width: 44, height: 44, flexShrink: 0, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border },
+    sidebarToggle: { width: 44, height: 44, flexShrink: 0, borderRadius: workspaceGeometry.controlRadius, alignItems: 'center', justifyContent: 'center' },
     sidebarToggleText: { color: theme.accent, fontSize: 18, fontWeight: '700' },
     // Feature: the compact navigator fills its bounded modal and keeps all chapter links scrollable.
     navigationBackdrop: { flex: 1, backgroundColor: 'rgba(18,16,21,0.34)', padding: 12 },
     navigationDrawer: { flex: 1, width: '100%', maxWidth: 360, backgroundColor: theme.surface, borderRadius: 18, overflow: 'hidden' },
     navigationClose: { minHeight: 44, alignSelf: 'flex-end', justifyContent: 'center', paddingHorizontal: 16 },
-    sidebar: { width: desktop ? 250 : '100%', flex: desktop ? undefined : 1, minHeight: 0, margin: desktop ? 14 : 0, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 23, paddingHorizontal: 18, paddingTop: 20 },
-    brandBlock: { flexDirection: 'row', alignItems: 'center', gap: 11, marginBottom: 28 },
-    brandMark: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.accentSoft },
-    brandMarkText: { fontSize: 22, fontWeight: '700', color: theme.accent, fontStyle: 'italic' },
-    brand: { fontSize: 15, fontWeight: '700', color: theme.text },
+    sidebar: { width: desktop ? workspaceGeometry.sidebarWidth : '100%', flex: desktop ? undefined : 1, minHeight: 0, backgroundColor: theme.surfaceAlt, paddingHorizontal: 18, paddingTop: 24 },
+    brandBlock: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 32 },
+    brandMark: { width: 24, height: 32, alignItems: 'center', justifyContent: 'center' },
+    brandMarkText: { fontFamily: 'Georgia', fontSize: 30, color: theme.accent, fontStyle: 'italic' },
+    brand: { fontFamily: 'Georgia', fontSize: 19, fontWeight: '600', color: theme.text },
     brandCaption: { color: theme.muted, fontSize: 12, marginTop: 3 },
-    newButton: { minHeight: 44, backgroundColor: theme.accent, borderRadius: 14, paddingVertical: 11, paddingHorizontal: 13, marginBottom: 26 },
+    newButton: { minHeight: 44, backgroundColor: theme.accent, borderRadius: workspaceGeometry.controlRadius, paddingVertical: 11, paddingHorizontal: 13, marginBottom: 24 },
     newButtonText: { color: theme.mode === 'dark' ? '#201B2A' : '#FFFFFF', fontSize: 14, fontWeight: '700' },
     navHeading: { color: theme.muted, fontSize: 13, fontWeight: '600', marginLeft: 9, marginBottom: 9 },
-    projectsHeading: { marginTop: 29 },
-    navRow: { minHeight: 44, paddingHorizontal: 10, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 11 },
+    projectsHeading: { marginTop: 24 },
+    navRow: { minHeight: 44, paddingHorizontal: 12, borderRadius: workspaceGeometry.controlRadius, flexDirection: 'row', alignItems: 'center' },
     navRowActive: { backgroundColor: theme.accentSoft },
     navIcon: { width: 16, textAlign: 'center', fontSize: 14, color: theme.muted },
     navIconActive: { color: theme.accent },
-    navLabel: { flex: 1, minWidth: 0, fontSize: 14, color: theme.muted, fontWeight: '500' },
+    navLabel: { flex: 1, minWidth: 0, fontSize: 14, color: theme.text, fontWeight: '400' },
     navLabelActive: { color: theme.accent, fontWeight: '700' },
     storyNavList: { flex: 1 },
-    storyNavRow: { minHeight: 44, paddingHorizontal: 9, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
-    storyNavRowActive: { backgroundColor: theme.surfaceAlt },
-    projectDot: { width: 8, height: 8, borderRadius: 4 },
+    storyNavRow: { minHeight: 44, paddingHorizontal: 10, borderRadius: workspaceGeometry.controlRadius, flexDirection: 'row', alignItems: 'center', gap: 8 },
+    storyNavRowActive: { backgroundColor: theme.background },
+    projectDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.secondary },
     storyNavTitle: { color: theme.text, fontSize: 14, flex: 1 },
     storyNavTitleActive: { fontWeight: '700' },
     chapterNavGroup: { paddingBottom: 6 },
     chapterNavHeading: { color: theme.muted, fontSize: 12, fontWeight: '700', marginLeft: 10, marginTop: 16, marginBottom: 6 },
-    chapterNavRow: { minHeight: 44, justifyContent: 'center', marginLeft: 10, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10 },
+    chapterNavRow: { minHeight: 44, justifyContent: 'center', marginLeft: 10, paddingVertical: 6, paddingHorizontal: 12, borderRadius: workspaceGeometry.controlRadius },
     chapterNavText: { color: theme.muted, fontSize: 14 },
     chapterNavTextActive: { color: theme.accent, fontWeight: '700' },
     addChapterLink: { minHeight: 44, justifyContent: 'center', marginLeft: 20, paddingVertical: 7 },
     addChapterText: { color: theme.muted, fontSize: 14 },
-    sidebarFooter: { borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 14, paddingBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 9 },
+    sidebarFooter: { paddingTop: 20, paddingBottom: 24, flexDirection: 'row', alignItems: 'center', gap: 10 },
     avatar: { height: 31, width: 31, borderRadius: 16, backgroundColor: theme.secondarySoft, alignItems: 'center', justifyContent: 'center' },
     avatarText: { color: theme.secondary, fontSize: 14, fontWeight: '700' },
     profileCopy: { flex: 1, minWidth: 0 },
     profileName: { color: theme.text, fontSize: 14, fontWeight: '700' },
     profileStatus: { color: theme.muted, fontSize: 12, marginTop: 3 },
-    topbar: { minHeight: 64, flexShrink: 0, flexWrap: 'wrap', paddingVertical: 10, marginHorizontal: desktop ? 18 : 9, marginTop: desktop ? 14 : 8, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 18, paddingHorizontal: desktop ? 18 : 14, flexDirection: 'row', alignItems: 'center', gap: 14, },
+    topbar: { minHeight: 76, flexShrink: 0, flexWrap: 'wrap', paddingVertical: 12, paddingHorizontal: desktop ? 28 : 16, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.background },
     topBack: { minHeight: 44, justifyContent: 'center', maxWidth: '100%', paddingVertical: 8, paddingRight: 8 },
     topBackText: { color: theme.accent, fontSize: 14, fontWeight: '700' },
     topbarCopy: { flex: 1, minWidth: 120 },
@@ -810,57 +815,57 @@ function makeStyles(theme: Theme, desktop: boolean, spaciousContent: boolean) {
     saveBadge: { flexDirection: 'row', alignItems: 'center', gap: 7 },
     saveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: theme.secondary },
     saveText: { color: theme.muted, fontSize: 14 },
-    topAction: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 13, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: theme.border },
+    topAction: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 8, borderRadius: workspaceGeometry.controlRadius, backgroundColor: theme.surfaceAlt },
     topActionText: { color: theme.text, fontSize: 14, fontWeight: '700' },
-    libraryContent: { width: '100%', maxWidth: 1160, alignSelf: 'center', paddingHorizontal: desktop ? 38 : 16, paddingTop: desktop ? 32 : 22, paddingBottom: 50 },
-    welcomePanel: { backgroundColor: theme.accentSoft, borderRadius: 18, padding: desktop ? 27 : 19, flexDirection: desktop ? 'row' : 'column', alignItems: desktop ? 'center' : 'flex-start', justifyContent: 'space-between', gap: 20, marginBottom: 31 },
+    libraryContent: { width: '100%', maxWidth: 1160, alignSelf: 'center', paddingHorizontal: desktop ? 44 : 20, paddingTop: desktop ? 28 : 16, paddingBottom: 56 },
+    welcomePanel: { paddingVertical: 24, flexDirection: spaciousContent ? 'row' : 'column', alignItems: spaciousContent ? 'center' : 'flex-start', justifyContent: 'space-between', gap: 24, marginBottom: 32 },
     welcomeCopy: { flex: 1 },
-    welcomeTitle: { color: theme.text, fontSize: desktop ? 26 : 22, fontWeight: '700', marginTop: 9, maxWidth: 480 },
-    welcomeSub: { color: theme.muted, fontSize: 14, lineHeight: 18, marginTop: 7, maxWidth: 430 },
-    primaryButton: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start', backgroundColor: theme.accent, borderRadius: 13, paddingHorizontal: 15, paddingVertical: 10 },
+    welcomeTitle: { color: theme.text, fontFamily: 'Georgia', fontSize: desktop ? 32 : 28, lineHeight: desktop ? 40 : 36, fontWeight: '400', maxWidth: 510 },
+    welcomeSub: { color: theme.muted, fontSize: 14, lineHeight: 22, marginTop: 12, maxWidth: 500 },
+    primaryButton: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start', backgroundColor: theme.accent, borderRadius: workspaceGeometry.controlRadius, paddingHorizontal: 18, paddingVertical: 12 },
     primaryButtonText: { color: theme.mode === 'dark' ? '#201B2A' : '#FFFFFF', fontSize: 14, fontWeight: '700' },
-    sectionHeading: { flexWrap: 'wrap', gap: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12, marginTop: 8 },
-    sectionTitle: { color: theme.text, fontSize: 18, fontWeight: '700' },
-    sectionCaption: { color: theme.muted, fontSize: 12 },
+    sectionHeading: { flexWrap: 'wrap', gap: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16, marginTop: 16 },
+    sectionTitle: { color: theme.text, fontSize: 16, fontWeight: '600' },
+    sectionCaption: { color: theme.muted, fontSize: 13 },
     exampleLabel: { color: theme.accent, fontSize: 12, fontWeight: '700', marginVertical: 6 },
-    storyCardGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 13, marginBottom: 31 },
-    storyCard: { maxWidth: '100%', width: desktop ? 275 : '100%', backgroundColor: theme.surface, borderRadius: 14, borderWidth: 1, borderColor: theme.border, padding: 16 },
-    storyCardOpen: { minHeight: 153 },
+    storyCardGrid: { gap: 12, marginBottom: 32 },
+    storyCard: { width: '100%', backgroundColor: theme.surface, borderRadius: workspaceGeometry.panelRadius, padding: desktop ? 24 : 20, flexDirection: spaciousContent ? 'row' : 'column', alignItems: spaciousContent ? 'center' : 'stretch', gap: 12 },
+    storyCardOpen: { flex: 1, minWidth: 0, paddingVertical: 4 },
     storyCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
     storyCardMark: { width: 30, height: 30, borderRadius: 10, backgroundColor: theme.accentSoft, alignItems: 'center', justifyContent: 'center' },
     storyCardMarkText: { color: theme.accent, fontSize: 14 },
-    storyCardTitle: { color: theme.text, fontSize: 18, fontWeight: '700' },
-    storyCardDescription: { color: theme.muted, fontSize: 14, lineHeight: 20, marginTop: 5, minHeight: 30 },
-    storyStats: { flexDirection: 'row', gap: 12, marginTop: 14 },
-    statText: { color: theme.muted, fontSize: 12 },
+    storyCardTitle: { color: theme.text, fontFamily: 'Georgia', fontSize: 24, lineHeight: 30, fontWeight: '400' },
+    storyCardDescription: { color: theme.muted, fontSize: 14, lineHeight: 22, marginTop: 8, maxWidth: 620 },
+    storyStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 16 },
+    statText: { color: theme.muted, fontSize: 13 },
     cardArrow: { color: theme.muted, fontSize: 18 },
     storyDelete: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-end', paddingTop: 8 },
     storyDeleteText: { color: theme.muted, fontSize: 14 },
-    recentList: { backgroundColor: theme.surface, borderRadius: 13, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },
-    recentRow: { minHeight: 61, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 11, borderBottomWidth: 1, borderBottomColor: theme.border },
-    recentIcon: { width: 31, height: 31, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    recentList: { backgroundColor: theme.surface, borderRadius: workspaceGeometry.panelRadius, overflow: 'hidden' },
+    recentRow: { minHeight: 76, paddingHorizontal: 20, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 16 },
+    recentIcon: { width: 32, height: 40, borderRadius: 2, alignItems: 'center', justifyContent: 'center' },
     recentCopy: { flex: 1 },
     recentTitle: { color: theme.text, fontSize: 14, fontWeight: '700' },
     recentMeta: { color: theme.muted, fontSize: 12, marginTop: 4 },
     mutedText: { color: theme.muted, fontSize: 14 },
     storyHubContent: { width: '100%', maxWidth: 1280, alignSelf: 'center', paddingHorizontal: desktop ? 38 : 16, paddingVertical: desktop ? 28 : 18, paddingBottom: 48 },
-    storyHubHero: { borderRadius: 17, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, padding: desktop ? 25 : 18, marginBottom: 27, flexDirection: spaciousContent ? 'row' : 'column', alignItems: spaciousContent ? 'center' : 'stretch', gap: 18 },
+    storyHubHero: { paddingVertical: desktop ? 24 : 16, marginBottom: 28, flexDirection: spaciousContent ? 'row' : 'column', alignItems: spaciousContent ? 'center' : 'stretch', gap: 24 },
     storyHubHeroCopy: { flex: 1 },
-    hubTitleInput: { color: theme.text, fontSize: desktop ? 25 : 22, fontWeight: '700', padding: 0, marginTop: 8 },
-    hubDescription: { color: theme.muted, fontSize: 14, lineHeight: 20, padding: 0, marginTop: 7, minHeight: 36 },
+    hubTitleInput: { color: theme.text, fontFamily: 'Georgia', fontSize: desktop ? 34 : 28, fontWeight: '400', padding: 0, marginTop: 8 },
+    hubDescription: { color: theme.muted, fontSize: 15, lineHeight: 24, padding: 0, marginTop: 12, minHeight: 48 },
     storyHubStats: { color: theme.muted, fontSize: 12, marginTop: 12 },
-    continueButton: { backgroundColor: theme.secondarySoft, borderRadius: 9, paddingHorizontal: 15, paddingVertical: 11 },
-    continueButtonText: { color: theme.secondary, fontSize: 14, fontWeight: '700' },
-    categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 27 },
-    categoryCard: { width: desktop ? '31%' : '100%', minHeight: 88, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 13, padding: 15 },
+    continueButton: { minHeight: 44, justifyContent: 'center', backgroundColor: theme.accent, borderRadius: workspaceGeometry.controlRadius, paddingHorizontal: 18, paddingVertical: 12 },
+    continueButtonText: { color: theme.mode === 'dark' ? '#201B2A' : '#FFFFFF', fontSize: 14, fontWeight: '600' },
+    categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 32, rowGap: 8, marginBottom: 24 },
+    categoryCard: { width: spaciousContent ? '46%' : '100%', minHeight: 80, paddingVertical: 16 },
     categoryTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 4 },
     categoryIconText: { color: theme.accent, fontSize: 14, fontWeight: '700' },
     categoryCount: { color: theme.muted, fontSize: 14 },
-    categoryTitle: { color: theme.text, fontSize: 15, fontWeight: '700', flexShrink: 1 },
+    categoryTitle: { color: theme.accent, fontSize: 16, fontWeight: '600', flexShrink: 1 },
     categorySubtitle: { color: theme.muted, fontSize: 13, lineHeight: 20, marginTop: 4 },
-    chapterPanel: { flex: spaciousContent ? 1 : undefined, minWidth: 0, backgroundColor: theme.surface, borderRadius: 13, borderWidth: 1, borderColor: theme.border, padding: desktop ? 19 : 14 },
-    hubBottomGrid: { gap: 14, alignItems: 'stretch', marginBottom: 24 },
-    activityPanel: { width: spaciousContent ? 280 : '100%', backgroundColor: theme.surface, borderRadius: 13, borderWidth: 1, borderColor: theme.border, padding: desktop ? 19 : 14 },
+    chapterPanel: { flex: spaciousContent ? 1 : undefined, minWidth: 0, backgroundColor: theme.surface, borderRadius: workspaceGeometry.panelRadius, padding: desktop ? 24 : 18 },
+    hubBottomGrid: { gap: 28, alignItems: 'stretch', marginBottom: 24 },
+    activityPanel: { width: spaciousContent ? 280 : '100%', paddingVertical: 20, paddingHorizontal: desktop ? 8 : 0 },
     activityHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12 },
     activityClock: { color: theme.accent, fontSize: 18 },
     activityList: { borderTopWidth: 1, borderTopColor: theme.border },
@@ -876,12 +881,12 @@ function makeStyles(theme: Theme, desktop: boolean, spaciousContent: boolean) {
     panelHeading: { flexWrap: 'wrap', gap: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12 },
     panelTitle: { color: theme.text, fontSize: 17, fontWeight: '700' },
     panelSubtitle: { color: theme.muted, fontSize: 12, marginTop: 4 },
-    secondaryButton: { minHeight: 44, justifyContent: 'center', borderWidth: 1, borderColor: theme.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, alignSelf: 'flex-start' },
+    secondaryButton: { minHeight: 44, justifyContent: 'center', backgroundColor: theme.surfaceAlt, borderRadius: workspaceGeometry.controlRadius, paddingHorizontal: 14, paddingVertical: 8, alignSelf: 'flex-start' },
     secondaryButtonText: { color: theme.accent, fontSize: 14, fontWeight: '700' },
     chapterList: { borderTopWidth: 1, borderTopColor: theme.border },
     chapterRow: { minHeight: 57, flexDirection: 'row', alignItems: 'center', gap: 11, borderBottomWidth: 1, borderBottomColor: theme.border },
-    chapterNumber: { width: 31, height: 31, borderRadius: 9, backgroundColor: theme.accentSoft, alignItems: 'center', justifyContent: 'center' },
-    chapterNumberText: { color: theme.accent, fontSize: 14, fontWeight: '800' },
+    chapterNumber: { width: 28, height: 36, alignItems: 'center', justifyContent: 'center' },
+    chapterNumberText: { color: theme.muted, fontSize: 14, fontWeight: '400' },
     chapterCopy: { flex: 1 },
     chapterTitle: { color: theme.text, fontSize: 14, fontWeight: '700' },
     chapterMeta: { color: theme.muted, fontSize: 12, marginTop: 4 },
@@ -891,7 +896,7 @@ function makeStyles(theme: Theme, desktop: boolean, spaciousContent: boolean) {
     collectionCopy: { flex: 1 },
     collectionTitle: { color: theme.text, fontSize: 18, fontWeight: '700' },
     collectionSubtitle: { color: theme.muted, fontSize: 12, marginTop: 4 },
-    collectionList: { backgroundColor: theme.surface, borderRadius: 13, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },
+    collectionList: { backgroundColor: theme.surface, borderRadius: workspaceGeometry.panelRadius, overflow: 'hidden' },
     collectionRowWrap: { borderBottomWidth: 1, borderBottomColor: theme.border },
     collectionRow: { minHeight: 61, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 11 },
     collectionRowCopy: { flex: 1 },
@@ -909,19 +914,19 @@ function makeStyles(theme: Theme, desktop: boolean, spaciousContent: boolean) {
     groupAdd: { padding: 7 },
     groupAddText: { color: theme.accent, fontSize: 14, fontWeight: '700' },
     groupEmpty: { color: theme.muted, fontSize: 14, paddingVertical: 15, paddingHorizontal: 13, backgroundColor: theme.surface, borderRadius: 10, borderWidth: 1, borderColor: theme.border },
-    entryList: { backgroundColor: theme.surface, borderRadius: 11, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },
+    entryList: { backgroundColor: theme.surface, borderRadius: workspaceGeometry.panelRadius, overflow: 'hidden' },
     entryRowWrap: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: theme.border, paddingRight: 8 },
     entryRow: { flex: 1, minHeight: 60, paddingLeft: 13, flexDirection: 'row', alignItems: 'center', gap: 10 },
     entryBullet: { width: 7, height: 7, borderRadius: 4, backgroundColor: theme.secondary },
     addAnother: { alignSelf: 'flex-start', marginTop: 12, padding: 8 },
     helperNote: { color: theme.muted, fontSize: 12, lineHeight: 20, marginTop: 17 },
-    emptyState: { minHeight: 210, borderRadius: 13, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 8 },
+    emptyState: { minHeight: 210, backgroundColor: theme.surface, borderRadius: workspaceGeometry.panelRadius, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 8 },
     emptyMark: { height: 39, width: 39, borderRadius: 13, backgroundColor: theme.accentSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
     emptyMarkText: { color: theme.accent, fontSize: 16 },
     emptyTitle: { color: theme.text, fontSize: 14, fontWeight: '700', textAlign: 'center' },
     emptyDetail: { color: theme.muted, maxWidth: 300, textAlign: 'center', fontSize: 14, lineHeight: 20 },
     entryEditorArea: { flexGrow: 1, alignItems: 'center', padding: desktop ? 35 : 14, paddingBottom: 40 },
-    entryPaper: { width: '100%', maxWidth: 760, minHeight: 530, backgroundColor: theme.surface, borderRadius: 12, borderWidth: 1, borderColor: theme.border, padding: desktop ? 45 : 21 },
+    entryPaper: { width: '100%', maxWidth: 760, minHeight: 530, backgroundColor: theme.surface, borderRadius: workspaceGeometry.pageRadius, padding: desktop ? 48 : 24 },
     entryTitleInput: { color: theme.text, fontSize: 22, fontWeight: '700', padding: 0, marginTop: 9, marginBottom: 20 },
     entryBodyInput: { color: theme.text, fontSize: 14, lineHeight: 22, minHeight: 300, padding: 0 },
     entryTimestamp: { color: theme.muted, fontSize: 12, marginTop: 25 },

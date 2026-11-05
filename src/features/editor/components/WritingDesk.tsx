@@ -1,3 +1,4 @@
+import { workspaceGeometry } from '../../../theme/theme';
 import { Modal, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useState } from 'react';
 import Pressable from '../../../components/AccessiblePressable';
@@ -66,11 +67,12 @@ export function WritingDeskStatus({ theme, words, selectedWords, characters, goa
 
 // Feature: shared desk styling keeps view controls and live progress consistent in light and dark themes.
 function makeStyles(theme: Theme) {
+  // Feature: quieter surfaces and consistent geometry keep writing actions visible without competing with the manuscript.
   return StyleSheet.create({
-    controlsScroll: { flexGrow: 0, flexShrink: 0, marginHorizontal: 12 },
+    controlsScroll: { flexGrow: 0, flexShrink: 0, paddingHorizontal: 12, backgroundColor: theme.surface },
     controls: { alignItems: 'center', flexDirection: 'row', paddingVertical: 6, gap: 4 },
-    button: { minHeight: 44, paddingHorizontal: 12, justifyContent: 'center', borderRadius: 8 },
-    buttonText: { color: theme.accent, fontSize: 14, fontWeight: '600' },
+    button: { minHeight: 44, paddingHorizontal: 12, justifyContent: 'center', borderRadius: workspaceGeometry.controlRadius },
+    buttonText: { color: theme.text, fontSize: 14, fontWeight: '500' },
     divider: { width: 1, height: 20, backgroundColor: theme.border, marginHorizontal: 6 },
     selected: { backgroundColor: theme.accentSoft, borderColor: theme.accent },
     overlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: 'rgba(18,16,21,0.4)' },

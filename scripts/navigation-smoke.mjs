@@ -11,7 +11,8 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('http://127.0.0.1:8093');
+  // Feature: public root is the landing page; navigation checks begin at the browser writing desk.
+  await page.goto('http://127.0.0.1:8093/app');
   const button = (name) => page.getByRole('button', { name, exact: true });
   await button('Start my story').click();
   await page.getByRole('textbox', { name: 'New story title', exact: true }).fill('Navigation check');

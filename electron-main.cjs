@@ -1,8 +1,9 @@
 const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const path = require('node:path');
-const { writeFile } = require('node:fs/promises');
 const { createPdfBuffer } = require('./electron-pdf.cjs');
-const { createExternalBackup } = require('./electron-backup.cjs');
+const { createExternalBackup, prepareFileWrite, atomicWrite } = require('./electron-backup.cjs');
+const { createDesktopSecurity } = require('./electron-security.cjs');
+const desktopSecurity = createDesktopSecurity(path.join(__dirname, 'dist', 'index.html'), process.argv.includes('--dev') && !app.isPackaged);
 let mainWindow;
 let externalBackup;
 let quittingAfterBackup = false;
@@ -29,14 +30,28 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      webviewTag: false,
       preload: path.join(__dirname, 'electron-preload.cjs'),
     },
   });
   mainWindow = window;
 
+  // Feature: the privileged workspace cannot navigate to remote pages or spawn windows with its preload bridge.
+  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.webContents.on('will-navigate', (event, url) => {
+    if (!desktopSecurity.isTrustedDocument(url)) event.preventDefault();
+  });
+  window.webContents.on('will-redirect', (event, url) => {
+    if (!desktopSecurity.isTrustedDocument(url)) event.preventDefault();
+  });
+  window.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  // Feature: writing and cloud sync need no device permissions, so renderer permission requests fail closed.
+  window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+  window.webContents.session.setPermissionCheckHandler(() => false);
+
   window.once('ready-to-show', () => window.show());
 
-  if (process.argv.includes('--dev')) {
+  if (process.argv.includes('--dev') && !app.isPackaged) {
     window.loadURL('http://127.0.0.1:8081');
   } else {
     window.loadFile(path.join(__dirname, 'dist', 'index.html'));
@@ -45,12 +60,14 @@ function createWindow() {
 
 // Prints a safe manuscript in an isolated hidden window, then saves to the writer's chosen PDF path.
 ipcMain.handle('novel:export-pdf', async (event, options) => {
-  if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) throw new Error('PDF export is only available from the writing workspace.');
+  if (!desktopSecurity.isTrustedSender(event, mainWindow)) throw new Error('PDF export is only available from the writing workspace.');
   if (!options || typeof options.html !== 'string' || options.html.length > 50 * 1024 * 1024 || typeof options.filename !== 'string') throw new Error('Invalid PDF export request.');
   const destination = await dialog.showSaveDialog(mainWindow, { title: 'Export story as PDF', defaultPath: path.basename(options.filename), filters: [{ name: 'PDF document', extensions: ['pdf'] }] });
   if (destination.canceled || !destination.filePath) return { canceled: true };
+  // Feature: bind export to the approved entry and replace it without opening the destination for writing.
+  const approved = await prepareFileWrite(destination.filePath);
   const pdf = await createPdfBuffer(options.html);
-  await writeFile(destination.filePath, pdf);
+  await atomicWrite(approved, pdf);
   return { canceled: false };
 });
 
@@ -63,7 +80,7 @@ for (const [channel, action] of Object.entries({
   'novel:backup-open': () => externalBackup.openFolder(),
 })) {
   ipcMain.handle(channel, (event, ...args) => {
-    if (!mainWindow || event.sender !== mainWindow.webContents || event.senderFrame !== mainWindow.webContents.mainFrame) throw new Error('Backups are only available from the writing workspace.');
+    if (!desktopSecurity.isTrustedSender(event, mainWindow)) throw new Error('Backups are only available from the writing workspace.');
     return action(...args);
   });
 }

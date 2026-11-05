@@ -4,6 +4,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import { createWorkspaceStore, isWorkspace, MAX_VERSIONS, parseWorkspaceBackup, retainVersions, VERSION_INTERVAL } from '../src/features/workspace/lib/saveHistory.ts';
 import { createWebStorageAdapter } from '../src/features/workspace/lib/webStorage.ts';
 import { createStarterWorkspace } from '../src/domain/model.ts';
+import { WRITING_FONTS } from '../src/domain/writingFonts.ts';
 
 // Supplies isolated records, crash drafts, and failure injection for durable-save regression checks.
 function fixture(raw = null) {
@@ -33,6 +34,23 @@ test('legacy saves migrate while preserving chapters and all supporting collecti
   assert.deepEqual(loaded.workspace, workspace);
   assert.equal(JSON.parse(state.raw).format, 2);
   assert.deepEqual(JSON.parse(state.raw).workspace, workspace);
+});
+
+// Feature: the font picker must never offer a choice that makes a saved draft or backup invalid.
+test('expanded writing fonts survive backup import and reopening a saved workspace', async () => {
+  const workspace = createStarterWorkspace();
+  for (const { value } of WRITING_FONTS) {
+    workspace.stories[0].chapters[0].fontFamily = value;
+    assert.equal(parseWorkspaceBackup(JSON.stringify(workspace)).stories[0].chapters[0].fontFamily, value);
+  }
+  const { adapter } = fixture(JSON.stringify(workspace));
+  const store = createWorkspaceStore(adapter);
+  await store.load();
+  workspace.stories[0].chapters[0].fontFamily = 'Cambria';
+  await store.save(workspace);
+  assert.equal((await createWorkspaceStore(adapter).load()).workspace.stories[0].chapters[0].fontFamily, 'Cambria');
+  workspace.stories[0].chapters[0].fontFamily = 'Unknown font';
+  assert.throws(() => parseWorkspaceBackup(JSON.stringify(workspace)), /valid.*workspace backup/);
 });
 
 test('the first edit preserves the opening draft and automatic versions are spaced five minutes apart', async () => {
