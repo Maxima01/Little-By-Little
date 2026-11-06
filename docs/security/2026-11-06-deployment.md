@@ -11,7 +11,7 @@ Vercel project: `little-by-little` (`prj_GIrjlkv4e4vdOCqhdVzuJhBZ7p6r`), team `m
 - The web export now supplies a Content Security Policy allowing the configured Supabase origin and the explicit dictionary providers, with executable inline scripts, eval, arbitrary connections and framing blocked.
 - MIME-sniffing, referrer, permissions, opener and resource policies are supplied. Document responses are not cached by the application's policy; hashed Expo assets retain immutable caching.
 - Private files and source maps are not packaged into the public output. Missing routes return real 404 responses. Write methods are rejected by the static-site routing configuration.
-- Vercel accepted the project settings `gitForkProtection: true`, `directoryListing: false`, and `publicSource: false`. The repository's `vercel.json` also sets `public: false` for subsequent deployments.
+- Vercel accepted the project settings `gitForkProtection: true`, `directoryListing: false`, and `publicSource: false`. Source/log protection is managed through the provider setting: the currently deployed configuration schema rejects the older `public` property in `vercel.json`, despite older documentation referencing it.
 - Existing Vercel Authentication protection for deployment URLs was retained. The production website remains publicly accessible.
 
 ## Verification
