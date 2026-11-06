@@ -5,6 +5,7 @@ import type { Session, User } from '@supabase/supabase-js';
 import type { Workspace } from '../../../domain/model';
 import { cloudProjectKey, cloudRegistration, supabase } from '../lib/supabase';
 import { signInCloudAccount, signUpCloudAccount } from '../lib/cloudAuth';
+import { manageCloudSessionLifecycle } from '../lib/cloudSessionLifecycle';
 import type { AccountPolicyAcceptance } from '../../legal/lib/policyConsent';
 import { CloudConflictError, cloudFingerprint, cloudSessionScope, createCloudRepository, decideCloudSync, readCloudSyncSettings, type CloudBaseline, type CloudSessionScope, type CloudSnapshot, type CloudSyncSettings } from '../lib/cloudSync';
 
@@ -168,6 +169,15 @@ export function useCloudSync(props: Props): CloudSyncController {
         const raw = await AsyncStorage.getItem(SETTINGS_KEY);
         if (!mounted || generation.current !== token) return;
         const stored = readCloudSyncSettings(raw, nextScope);
+        // Feature: remove legacy plaintext manuscript baselines even when this device has paused syncing.
+        if (stored && raw !== JSON.stringify(stored)) {
+          try { await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(stored)); }
+          catch {
+            // Feature: a failed migration write must not turn paused sync back on or discard its conflict baseline.
+            if (mounted && generation.current === token) setError('Could not update sync settings on this device. Your existing sync preference is preserved.');
+          }
+          if (!mounted || generation.current !== token) return;
+        }
         baseline.current = stored?.baseline ?? null;
         enabledRef.current = stored?.enabled ?? true;
         updateEnabled(enabledRef.current); ready.current = true;
@@ -188,6 +198,12 @@ export function useCloudSync(props: Props): CloudSyncController {
     return () => { mounted = false; generation.current += 1; ready.current = false; sessionRef.current = null; subscription.unsubscribe(); };
   }, [showConflict]);
 
+  // Feature: pausing manuscript sync must not detach the native login's foreground refresh handler.
+  useEffect(() => {
+    if (!supabase || Platform.OS === 'web') return;
+    return manageCloudSessionLifecycle(supabase.auth, AppState);
+  }, []);
+
   // Feature: debounce successful local commits; polling/focus/reconnect receive other devices' changes.
   useEffect(() => {
     if (!user || !enabled) return;
@@ -196,11 +212,14 @@ export function useCloudSync(props: Props): CloudSyncController {
   }, [props.committedWorkspace, user, enabled, status === 'Ready to sync', sync]);
   useEffect(() => {
     if (!user || !enabled) return;
-    const refresh = () => { void sync(); };
+    // Feature: avoid spending cloud read quota while the app is hidden or the browser is known to be offline.
+    const refresh = () => {
+      if (Platform.OS === 'web' ? document.visibilityState === 'hidden' || navigator.onLine === false : AppState.currentState !== 'active') return;
+      void sync();
+    };
     const interval = setInterval(refresh, 30_000);
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') { if (Platform.OS !== 'web') supabase?.auth.startAutoRefresh(); refresh(); }
-      else if (Platform.OS !== 'web') supabase?.auth.stopAutoRefresh();
+      if (state === 'active') refresh();
     });
     if (Platform.OS === 'web') { window.addEventListener('online', refresh); window.addEventListener('focus', refresh); }
     return () => {

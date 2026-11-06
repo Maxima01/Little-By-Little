@@ -169,6 +169,11 @@ begin
   if p_known_revision is not null and (p_known_revision < 1 or p_known_revision > 9007199254740991) then
     raise exception using errcode = '22023', message = 'Invalid cloud revision.';
   end if;
+  -- Feature: reads must commit their quota charge even if PostgREST permits caller-selected rollback.
+  if coalesce(nullif(pg_catalog.current_setting('request.headers', true), '')::jsonb ->> 'prefer', '')
+       ~* 'tx[[:space:]]*=[[:space:]]*rollback' then
+    raise exception using errcode = '22023', message = 'Cloud reads require a committed request.';
+  end if;
   perform private.check_cloud_request(account_id, false);
   return query select cloud.revision,
     case when cloud.revision = p_known_revision then null::jsonb else cloud.workspace end,

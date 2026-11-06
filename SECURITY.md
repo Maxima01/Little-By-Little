@@ -18,6 +18,12 @@ Both cloud RPCs require the JWT's `session_id` to identify an existing `auth.ses
 <!-- Feature: a new login requires an explicit workspace choice before automatic syncing can begin. -->
 Cloud sync stores approval for the current login session. Identical copies still require the writer to connect the workspace on a new login. A token refresh within that login retains the approval. Cloud save attempts that fail workspace validation or revision checks still count against the account's write quota.
 
+<!-- Feature: keep cloud coordination data small without changing manuscript encryption or local recovery. -->
+Sync preferences store a SHA-256 content fingerprint rather than a second serialized manuscript. Existing preferences are converted for the same approved login, including paused devices. This is change detection, not manuscript encryption. Native session refresh follows foreground/background transitions independently of the manuscript-sync switch; background polling skips hidden apps and browsers known to be offline.
+
+<!-- Feature: bound cloud JSON responses through body completion and document the native buffering limit. -->
+The shared cloud transport restricts initial requests to the configured provider origin and keeps its 15-second deadline active until the response body finishes. Browser fetch rejects redirects; all runtimes reject responses reported from another origin. Auth responses are capped at 1 MiB and workspace responses at 24 MiB, leaving room around the database's 20 MiB workspace limit. Streaming responses are bounded while reading; native transports without streams validate buffered bytes before SDK parsing. The transport does not retry writes itself. These client changes and the read-quota rollback guard are recorded in [the November 7 review](./docs/security/2026-11-07-review.md); local source changes do not establish deployment.
+
 ## Web hosting
 
 Use `npm run build:web` and `npm run serve:web`. The dependency-free production host defaults to loopback and only accepts GET and HEAD. It serves known documents and exported asset paths; it does not serve the checkout, source maps, environment files, database scripts, an upload handler, or a general proxy. Filesystem containment also checks symlinks. Unknown document paths return the custom page with HTTP 404.

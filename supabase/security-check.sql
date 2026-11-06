@@ -100,6 +100,13 @@ begin
   assert saved -> 0 -> 'revision' = '2'::jsonb, 'CAS did not advance revision';
   -- Feature: caller-selected transaction rollback cannot bypass the committed save counter.
   perform set_config('request.headers', '{"prefer":"return=representation, tx=rollback"}', true);
+  -- Feature: returning a manuscript must not allow the caller to discard its read-quota charge.
+  begin
+    perform * from public.read_cloud_workspace('55555555-5555-4555-8555-555555555551', null);
+    raise exception 'Read rollback preference unexpectedly accepted';
+  exception when invalid_parameter_value then
+    assert sqlerrm = 'Cloud reads require a committed request.', 'Wrong read rejection for rollback preference';
+  end;
   begin
     perform public.save_cloud_workspace(body, 2, '55555555-5555-4555-8555-555555555551');
     raise exception 'Rollback preference unexpectedly accepted';

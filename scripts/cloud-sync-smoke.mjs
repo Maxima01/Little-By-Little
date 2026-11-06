@@ -190,6 +190,9 @@ try {
   const settingsKey = `little-by-little.cloud.v1:${cloudOrigin}`;
   const oldSettings = await page.evaluate((key) => localStorage.getItem(key), settingsKey);
   assert.ok(oldSettings, 'The approved session remembers its sync settings');
+  // Feature: the browser persists a compact digest, never a second manuscript in its sync preferences.
+  assert.match(JSON.parse(oldSettings).baseline.fingerprint, /^sha256:[a-f0-9]{64}$/);
+  assert.ok(oldSettings.length < 400, 'Sync preferences fit independently of manuscript size');
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   assert.equal((await localRecord(page)).workspace.stories[0].title, row.workspace.stories[0].title, 'Sign-out preserves local stories');

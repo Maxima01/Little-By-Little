@@ -1,4 +1,6 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
 import type { Workspace } from '../../../domain/model.ts';
 import { isWorkspace } from './saveHistory.ts';
 
@@ -22,6 +24,12 @@ function cloudError(error: { code?: string }): Error {
 
 const BASE64URL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 const SESSION_ID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
+const DIGEST = /^sha256:[a-f0-9]{64}$/;
+
+// Feature: store a fixed-size change detector instead of another plaintext manuscript in sync preferences.
+function digestFingerprint(canonical: string): string {
+  return `sha256:${bytesToHex(sha256(utf8ToBytes(canonical)))}`;
+}
 
 // Feature: scope local sync approval to the stable login ID, even when Supabase refreshes the access token.
 // This decodes only a local identifier. The server still verifies the token and authorizes each request.
@@ -57,7 +65,10 @@ export function readCloudSyncSettings(raw: string | null, scope: CloudSessionSco
   if (stored?.userId !== scope.userId || stored.sessionId !== scope.sessionId || typeof stored.enabled !== 'boolean') return null;
   const baseline = stored.baseline;
   const validBaseline = baseline && Number.isSafeInteger(baseline.revision) && baseline.revision > 0 && typeof baseline.fingerprint === 'string';
-  return { ...scope, enabled: stored.enabled, baseline: validBaseline ? baseline : null };
+  // Feature: upgrade the old canonical JSON baseline without losing approved-session conflict detection.
+  const fingerprint = validBaseline && (DIGEST.test(baseline.fingerprint) ? baseline.fingerprint
+    : baseline.fingerprint.startsWith('{') ? digestFingerprint(baseline.fingerprint) : null);
+  return { ...scope, enabled: stored.enabled, baseline: fingerprint ? { revision: baseline!.revision, fingerprint } : null };
 }
 
 // Feature: JSONB can reorder object keys, so compare canonical data while retaining array order.
@@ -73,7 +84,7 @@ function canonicalValue(value: unknown): unknown {
 // Feature: restoring changes the workspace timestamp; all manuscript and nested timestamps remain comparable.
 export function cloudFingerprint(workspace: Workspace): string {
   const { updatedAt: _restoredAt, ...content } = workspace;
-  return JSON.stringify(canonicalValue(content));
+  return digestFingerprint(JSON.stringify(canonicalValue(content)));
 }
 
 // Feature: compare both devices with their common baseline instead of silently overwriting concurrent edits.

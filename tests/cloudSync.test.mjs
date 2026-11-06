@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createHash } from 'node:crypto';
 import { createStarterWorkspace } from '../src/domain/model.ts';
 import { CloudConflictError, cloudFingerprint, cloudSessionScope, createCloudRepository, decideCloudSync, readCloudSyncSettings } from '../src/features/workspace/lib/cloudSync.ts';
 
@@ -17,6 +18,26 @@ function edit(workspace, text) {
   next.stories[0].chapters[0].html = '<p>' + text + '</p>';
   return next;
 }
+
+// Feature: verify migration against the previous canonical format and an independent SHA-256 implementation.
+test('sync baselines use fixed-size hashes and migrate legacy manuscript copies', () => {
+  const { workspace } = fixture();
+  workspace.stories[0].chapters[0].html = '<p>Private manuscript ' + 'x'.repeat(6 * 1024 * 1024) + '</p>';
+  const { updatedAt, ...content } = workspace;
+  const canonical = JSON.stringify(content, function (_key, value) {
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) : value;
+  });
+  const fingerprint = cloudFingerprint(workspace);
+  assert.equal(fingerprint, `sha256:${createHash('sha256').update(canonical).digest('hex')}`);
+  assert.equal(fingerprint.length, 71);
+  const scope = { userId: 'writer', sessionId: '11111111-1111-4111-8111-111111111111' };
+  const migrated = readCloudSyncSettings(JSON.stringify({ ...scope, enabled: false, baseline: { revision: 2, fingerprint: canonical } }), scope);
+  assert.deepEqual(migrated, { ...scope, enabled: false, baseline: { revision: 2, fingerprint } });
+  assert.ok(JSON.stringify(migrated).length < 300);
+  assert.ok(!JSON.stringify(migrated).includes('Private manuscript'));
+  assert.equal(decideCloudSync(edit(workspace, 'New local edit'), migrated.baseline, { revision: 2, workspace, savedAt: workspace.updatedAt }), 'upload');
+});
 
 test('first sign-in requires linking before any upload or replacement', () => {
   const { workspace, remote } = fixture();

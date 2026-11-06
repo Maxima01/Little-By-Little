@@ -1,7 +1,8 @@
 import 'react-native-url-polyfill/auto';
-import { AuthClient, createClient, processLock, type GoTrueClientOptions } from '@supabase/supabase-js';
+import { AuthClient, createClient, processLock } from '@supabase/supabase-js';
 import { publicCloudConfig } from './cloudConfig';
 import { nativeAuthStorage } from './nativeAuthStorage';
+import { createCloudFetch } from './cloudFetch';
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -14,16 +15,8 @@ try {
 }
 catch { console.error('Cloud configuration rejected. Use an HTTPS project origin and a public Supabase key.'); }
 
-// Feature: bound both account and workspace requests when the network stalls.
-const cloudFetch: NonNullable<GoTrueClientOptions['fetch']> = async (input, init) => {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15_000);
-  const abort = () => controller.abort();
-  init?.signal?.addEventListener('abort', abort, { once: true });
-  if (init?.signal?.aborted) controller.abort();
-  try { return await fetch(input, { ...init, signal: controller.signal }); }
-  finally { clearTimeout(timer); init?.signal?.removeEventListener('abort', abort); }
-};
+// Feature: share full-response deadlines and provider-origin checks across authentication and workspace requests.
+const cloudFetch = configuration ? createCloudFetch(configuration.url) : undefined;
 
 // Feature: cloud access is optional; only the public project key belongs in the renderer bundle.
 export const cloudProjectKey = configuration?.url ?? 'unconfigured';

@@ -4,7 +4,27 @@
 
 The public documents are available at `/terms` and `/privacy`, including on static hosts after `npm run build:web`. The writing desk shows the same documents offline under **Cloud saves → Terms & conditions / Privacy & data use**, including when cloud accounts are unavailable.
 
-The operator is **Michael Don D. Alaiza**, with privacy and support requests directed to **alaizamichael@gmail.com**. The current documents are dated **3 November 2026**, version `2026-11-03`. No operating country, governing jurisdiction, hosting region, or company registration has been assumed.
+The operator is **Michael Don D. Alaiza**, with privacy and support requests directed to **alaizamichael@gmail.com**. The operator confirmed the **Philippines**. The current documents are dated **6 November 2026**, version `2026-11-06`, and use Philippine law as their basis. Countries outside the Philippines have not been assessed. Hosting regions and company registration have not been assumed.
+
+## Philippine revision and release status
+
+<!-- Feature: preserve the legal basis and outstanding operational facts alongside the rewritten notices. -->
+
+Both documents were fully rewritten. The revision removes blanket damages exclusions, distinguishes notice acknowledgment from lawful consent, addresses sensitive and privileged information separately, adds Philippine privacy rights and the NPC complaint route, and explains conditional breach-notification duties. The prior text is preserved in `docs/legal/archive/2026-11-03.md`.
+
+This is a **draft for operational verification and Philippine legal review**, not a certification of compliance. Do not describe the service as legally compliant based on this rewrite. The public notice explicitly identifies unconfirmed retention and hosting details instead of inventing them. Resolve those items before treating it as a finalized notice for public cloud operation.
+
+Confirm and document the actual host, processing locations and transfer arrangements, processor agreements, cloud database/backup encryption, and retention periods for accounts, support messages, acknowledgment records, authentication/security logs, and backups. Supply any required business/contact address and the designated privacy officer’s contact details. Assess applicable NPC registration requirements, maintain an appropriate privacy management program and impact assessment, and verify that rights requests, deletion, incident response, and required notifications can actually be fulfilled. A disclaimer or user checkbox does not cure missing safeguards.
+
+Native mobile login-session encryption was verified in the current source; it does not encrypt local manuscripts or exported backups. No encryption or backend control was changed by this policy revision. Existing users are not automatically treated as accepting version `2026-11-06`; the operator must communicate material changes and obtain renewed agreement where required.
+
+Primary Philippine references checked on 6 November 2026:
+
+- [Republic Act 10173](https://privacy.gov.ph/data-privacy-act/): processing grounds and accountability.
+- [Implementing Rules and Regulations](https://privacy.gov.ph/implementing-rules%20regulations-data-privacy-act-2012/): retention, security, and notifiable breaches.
+- [NPC rights guidance](https://privacy.gov.ph/data-subject-rights/): rights and complaint procedures.
+- [NPC Circular 2023-06 in the official compendium](https://privacy.gov.ph/wp-content/uploads/2024/05/2023-compendium-2.pdf): organizational, physical, and technical safeguards.
+- [Civil Code, particularly Articles 1170–1174 and 1306](https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/2/53360): responsibility and lawful contractual conditions.
 
 ## Maintaining the documents
 

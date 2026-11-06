@@ -1,5 +1,5 @@
 // Feature: one version identifies the terms and privacy notice shown before account registration.
-export const LEGAL_VERSION = '2026-11-03';
+export const LEGAL_VERSION = '2026-11-06';
 
 export type AccountPolicyAcceptance = { termsAccepted: boolean; privacyAcknowledged: boolean };
 
