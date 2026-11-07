@@ -1,7 +1,5 @@
 # Public website
 
-<!-- Feature: describe the website's purpose, source assets, and contributor checks without retaining internal review logs. -->
-
 The website introduces Little by Little and leads writers to `/app`. Electron and native platforms open the writing workspace directly.
 
 ## Routes and account entry

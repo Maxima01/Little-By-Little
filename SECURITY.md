@@ -1,7 +1,5 @@
 # Security policy
 
-<!-- Feature: provide a private reporting route and explain user-facing security boundaries without publishing operational records. -->
-
 ## Report a vulnerability privately
 
 Email [alaizamichael@gmail.com](mailto:alaizamichael@gmail.com) with the subject **Little by Little security report**.

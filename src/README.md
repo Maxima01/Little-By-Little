@@ -2,7 +2,6 @@
 
 ## Entry points and ownership
 
-<!-- Feature: platform-specific entries separate public web pages from the shared writing workspace. -->
 `index.js` registers `shell/Entry`: native platforms open `App.tsx`, while `Entry.web.tsx` selects the landing page, `/app`, or a missing-page view. Electron opens the workspace directly through its trusted preload or local file entry. `electron-main.cjs` opens either the development server or built `dist/index.html`; its sandboxed preload exposes scoped PDF and backup operations. `electron-security.cjs` binds privileged IPC and navigation to that exact document. `scripts/prepare-desktop-build.mjs` adjusts built asset links for offline `file://` loading and stages the Electron runtime.
 
 The application is organized by ownership:
@@ -19,7 +18,6 @@ The application is organized by ownership:
 
 Feature folders keep UI in `components/` and reusable logic in `lib/`; workspace hooks live in `hooks/`. Keep native and web platform pairs in the same folder (for example, `RichEditor.tsx` and `RichEditor.web.tsx`) so Expo selects the implementation. Cross-feature imports should use the owning feature's logic instead of copying it.
 
-<!-- Feature: direct contributors to reusable hosting and optional cloud setup instructions. -->
 `server/web.mjs` serves the production website, and `scripts/prepare-web-build.mjs` prepares static-host documents. Optional cloud sync belongs to the workspace feature. See the [development guide](../docs/DEVELOPMENT.md) for hosting and the [cloud setup guide](../supabase/README.md) for configuring your own project.
 
 ## Save and recovery path
@@ -37,8 +35,6 @@ Feature folders keep UI in `components/` and reusable logic in `lib/`; workspace
 
 Run `npm run verify` for type checking, the Node tests in `tests/`, and a web build. Use `npm run test:pdf` when changing PDF output, and `npm run test:desktop -- --fast` when changing cross-screen desktop workflows. Desktop validation uses an isolated profile under `.local-checks/`; its screenshots, trace, exported files, and report stay there. See the [development guide](../docs/DEVELOPMENT.md#verification) for validation commands and scope.
 
-Document new functions and features with a brief comment explaining their purpose. Put non-obvious data and recovery invariants beside the code that enforces them.
+Document new functions and features with brief purpose comments in their source files. Keep Markdown guides focused on current behavior and instructions. Put non-obvious data and recovery invariants beside the code that enforces them.
 
-
-<!-- Feature: external backup integration keeps disk copies independent of the renderer's IndexedDB data. -->
 Automatic desktop backups are implemented in `electron-backup.cjs` through scoped preload methods. `features/workspace/lib/storage.ts` dispatches portable workspace copies after successful commits and restores, and guards startup when local data is missing but external copies remain. `externalBackup.ts` shares independent backup status with `AutomaticBackups.tsx`. The save hook retries the last committed workspace every minute; manual backup can additionally preserve open unsaved edits in a dated file. Electron serializes writes, flushes temporary files before replacement, retains 30 dated snapshots, stores device-only preferences in its profile, and waits for in-flight writes on normal quit. Both the staging script and package file list include the backup module.

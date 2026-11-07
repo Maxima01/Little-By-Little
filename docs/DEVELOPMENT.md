@@ -1,7 +1,5 @@
 # Development guide
 
-<!-- Feature: collect generic launch, build, and verification instructions outside the product README. -->
-
 ## Local development
 
 Use Node.js 22.13 or newer and install dependencies with `npm install`.
@@ -45,6 +43,6 @@ For website or navigation changes, build and serve the website before running `n
 
 ## Documentation
 
-Add a brief purpose comment when introducing a function or feature. Keep implementation details close to the relevant code, public setup instructions reusable, and the root README focused on the writing experience.
+Document new application functions and features with brief purpose comments in their source files. Keep Markdown guides focused on current behavior and instructions, without change-log entries or feature-log comments. Keep the root README focused on the writing experience.
 
 Use fictional data and placeholders in public examples. Keep production inventories, private audit results, deployment logs, credentials, and unresolved vulnerability details outside the tracked documentation. Report vulnerabilities through the [security policy](../SECURITY.md).

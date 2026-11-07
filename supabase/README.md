@@ -1,7 +1,5 @@
 # Optional cloud setup
 
-<!-- Feature: provide reusable cloud setup instructions with placeholders, without production identifiers or deployment history. -->
-
 Cloud saves are optional. Local writing and backups work without configuring Supabase.
 
 ## Configure your own project

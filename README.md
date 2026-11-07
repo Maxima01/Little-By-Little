@@ -2,8 +2,6 @@
 
 An offline-first writing workspace for novels and other long-form stories. Keep your manuscript, characters, world building, and research together, with optional cloud sync across devices.
 
-<!-- Feature: a concise public overview explains writing, recovery, and optional sync, with contributor setup in separate guides. -->
-
 ## What you can do
 
 - Write and organize stories, chapters, and scenes in a rich-text editor.

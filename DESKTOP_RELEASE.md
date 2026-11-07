@@ -1,12 +1,10 @@
 # Windows desktop releases
 
-<!-- Feature: document the branded, self-contained installer, download publishing, and verified signing workflow. -->
-
 Run `npm run release:windows` on Windows to build the x64 installer, verify its signature status, generate its SHA-256 checksum and download manifest, and rebuild the website. The installer is in `release/Little-by-Little-<version>-x64-Setup.exe`. The complete local website is in `dist/`, including `downloads/`. Run `npm run serve:web` to preview it.
 
 The application bundles Electron (including Chromium and Node), the compiled renderer, and required runtime files. Users do not need a development environment or a separate dependency installation. Runtime licenses from Electron remain in the packaged application. Local writing works offline; cloud sync and dictionary requests need internet access.
 
-The existing website symbol supplies the executable, installer, uninstaller, shortcuts, taskbar and favicon. Source artwork is `public/website/app-logo.svg`. Run `npm run brand:generate` to regenerate committed PNG/ICO assets using local Edge.
+The application logo supplies the executable, installer, uninstaller, shortcuts, taskbar and favicon. Source artwork is `public/website/app-logo.svg`. Run `npm run brand:generate` to regenerate PNG/ICO assets using local Edge.
 
 ## Packaging safeguards
 

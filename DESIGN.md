@@ -1,6 +1,6 @@
 ---
 name: Little by Little
-description: The implemented visual system for the writing workspace and public website.
+description: The visual system for the writing workspace and public website.
 colors:
   paper: "#FAF7F2"
   surface: "#FFFFFF"
@@ -114,21 +114,20 @@ components:
 
 # Design System: Little by Little
 
-<!-- Feature: record the shipped visual rules so future changes preserve the existing palette, writing hierarchy, and interaction affordances. -->
-
 ## Overview
 
-This is an extraction of the existing application and its November 2026 refinement, not a replacement identity. Warm paper surfaces, violet actions, sage status accents, and serif manuscript text remain shared across the app and website. The user's constraint is to retain these colors while making both surfaces feel less generic and preserving their workflows.
+The app and website share warm paper surfaces, violet actions, sage status accents, and serif manuscript text. Preserve these colors and keep writing workflows central to the interface.
 
-The workspace gives the draft priority through continuous navigation, quieter toolbars, readable rows, and open context sections. The website uses the same materials at a larger reading scale. Its particular manuscript-spread composition is documented in `src/features/website/README.md`; it is not a required layout for future app screens. No new brand metaphor or product positioning is established here.
+The workspace gives the draft priority through continuous navigation, quieter toolbars, readable rows, and open context sections. The website uses the same materials at a larger reading scale. Its manuscript-spread composition is documented in `src/features/website/README.md`; app screens use layouts suited to their writing tasks.
 
 **Key Characteristics:**
+
 - Warm neutral surfaces with restrained violet and sage accents.
 - Serif manuscript and story titles; familiar sans-serif controls.
 - Flat shared surfaces, explicit selected states, and visible keyboard focus.
 - Responsive hierarchy that keeps writing and navigation actions available.
 
-Source authority: `src/theme/theme.ts`, `src/shell/App.tsx`, the editor components and `rich-editor.css`, and `src/features/website/website.css`. The frontmatter records reusable extracted values; it does not replace those implementation sources.
+Source authority: `src/theme/theme.ts`, `src/shell/App.tsx`, the editor components and `rich-editor.css`, and `src/features/website/website.css`. The frontmatter records reusable design values; implementation sources define their actual use.
 
 ## Colors
 
@@ -141,7 +140,7 @@ Violet marks primary actions, links, selected navigation, and focus. Violet-soft
 Sage-ink identifies positive progress and saving context, paired with sage fills. Status meaning must also be present in text.
 
 ### Tertiary
-Peach remains an existing supporting accent. It is not a new primary action color.
+Peach is a supporting accent; violet identifies primary actions.
 
 ### Neutral
 Paper is the workspace background; surface holds manuscript content and selected containers; surface-alt forms the continuous sidebar and secondary controls. Ink carries content, muted carries supporting information, and border separates related rows and form fields. Primary buttons use surface text in light mode and dark-action-ink in dark mode.
@@ -150,7 +149,7 @@ Paper is the workspace background; surface holds manuscript content and selected
 
 ## Typography
 
-Georgia and its serif fallbacks carry manuscript text, library story titles, and website display headings. The app retains platform-default interface text; the website explicitly uses Arial and sans-serif fallbacks. This pairing is inherited and retained, not a new font recommendation.
+Georgia and its serif fallbacks carry manuscript text, library story titles, and website display headings. The app retains platform-default interface text; the website explicitly uses Arial and sans-serif fallbacks.
 
 The frontmatter captures the public display/headline/body roles, the manuscript-row title, the default editor prose, and common interface labels. App screen headings vary by purpose: library welcomes use Georgia at desktop/mobile sizes of 32/28px, while compact navigation and tool labels predominantly use 14px. The public body reduces to 16px on phones; its hero headline uses `clamp(46px,13vw,72px)` below the compact breakpoint. Supporting text and form labels retain their existing separate roles rather than being forced into a decorative scale.
 
@@ -162,7 +161,7 @@ The editor's font, size, page width, and line spacing are writer preferences. Th
 
 The desktop workspace uses a continuous sidebar with width from `workspaceGeometry.sidebarWidth` (260px). It appears beside the content from 900px viewport width; smaller viewports use the bounded, scrollable navigation drawer. Content may stack even on desktop when the remaining area is below 900px. The library has a maximum content width of 1160px and the story hub 1280px. Writer-controlled manuscript widths remain available.
 
-Use shared rows and section spacing to group navigation, manuscripts, and chapter information. The chapter-context surface is open rather than a stack of nested cards. Its controls retain their own field and selection boundaries. Editor toolbars remain horizontal scroll regions where the complete set of controls cannot fit, with the existing scroll hint; this retained behavior is a practical limitation, not a mandatory pattern for every future toolbar.
+Use shared rows and section spacing to group navigation, manuscripts, and chapter information. The chapter-context surface is open rather than a stack of nested cards. Its controls retain their own field and selection boundaries. Editor toolbars remain horizontal scroll regions where the complete set of controls cannot fit, with a scroll hint when controls extend beyond the visible area.
 
 The website uses full-width color fields, a maximum 1376px content measure for its major reading sections, and a 1600px outer cap on very wide screens. Its spread becomes a single column at 900px and a linear phone layout at 700px. Phone content typically uses 20px side insets; the hero has its own tighter outer inset. Desktop sticky detail copy only applies above 1100px. Preserve the source-specific breakpoints rather than assuming one global breakpoint fits both surfaces.
 
@@ -174,7 +173,7 @@ Main surfaces are flat. Tonal contrast, whitespace, and thin row dividers establ
 
 ## Shapes
 
-`workspaceGeometry` distinguishes small control corners, panel corners, and nearly square manuscript pages. These are the reusable defaults for the refined workspace. The public site's action buttons and filled sections remain square. Existing specialized dialogs and older forms retain individual radii; the new geometry is not evidence that every component has been migrated.
+`workspaceGeometry` distinguishes small control corners, panel corners, and nearly square manuscript pages. These are the reusable defaults for workspace controls, panels, and pages. The public site's action buttons and filled sections are square. Specialized dialogs and forms may use individual corner radii.
 
 Thin borders remain appropriate for inputs, selected chips, and meaningful row divisions. Avoid enclosing every subsection when typography and spacing already establish its grouping.
 
@@ -205,16 +204,18 @@ With motion permitted, the website uses a brief staggered entrance and a slow sc
 ## Do's and Don'ts
 
 ### Do:
+
 - Do retain the existing semantic colors in both workspace themes.
 - Do prioritize the manuscript and use explicit text labels for navigation and actions.
-- Do use the shared workspace geometry for the refined controls, panels, and writing pages.
+- Do use the shared workspace geometry for controls, panels, and writing pages.
 - Do preserve visible focus, selected states, readable labels, and available compact-screen actions.
 - Do label temporary examples clearly and show actual application content as product evidence.
 - Do respect reduced motion without hiding content or controls.
 
 ### Don't:
+
 - Don't introduce a new palette, font identity, or brand metaphor as part of routine refinement.
 - Don't surround every writing subsection with another card or apply shadows to ordinary rows.
 - Don't turn the website's current spread composition into a mandatory app layout.
-- Don't treat retained legacy radii or mobile toolbar scrolling as new system-wide requirements.
+- Don't apply specialized dialog radii or mobile toolbar scrolling to every component.
 - Don't use fabricated endorsements, statistics, or outside imagery to imply proof the product does not have.
