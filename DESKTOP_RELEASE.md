@@ -19,19 +19,19 @@ The existing website symbol supplies the executable, installer, uninstaller, sho
 
 ## Publish on a website
 
-No hosting provider is configured yet. The download section reads `/downloads/latest.json`; absent or invalid metadata shows an unavailable message instead of a broken download button.
+Desktop downloads are configured separately from the writing website. The download section reads `/downloads/latest.json`; absent or invalid metadata shows an unavailable message instead of a broken download button.
 
 For a server that accepts large files, deploy the generated `dist/` directory. The included Node server explicitly permits only the manifest, checksum list and versioned installer names inside `downloads/` and sends installers as attachments.
 
 For separately hosted binaries (for example, a GitHub Release or object storage), upload the installer first. Set `DESKTOP_DOWNLOAD_BASE_URL` to the HTTPS directory containing that exact filename, run `node scripts/stage-desktop-download.mjs`, then `npm run build:web`. Deploy the generated `downloads/latest.json` and `SHA256SUMS.txt` with the website. No cross-origin fetch is needed for the installer; it is a normal download link. Confirm the published installer URL and checksum before deploying the manifest. Omit local `.exe` copies from the website deployment when using an external download URL. The script does not upload or publish files.
 
-The web host must serve `/downloads/latest.json` as JSON, not a single-page-app fallback. Set its cache policy to `no-store`. Use HTTPS and preserve the production security headers described in `SECURITY.md`. Choose hosting and file storage limits before uploading large installer files.
+The web host must serve `/downloads/latest.json` as JSON, not a single-page-app fallback. Set its cache policy to `no-store`. Use HTTPS and preserve the production response headers described in the [development guide](docs/DEVELOPMENT.md). Choose hosting and file storage limits before uploading large installer files.
 
 ## Publicly trusted signing
 
 An unsigned preview is clearly labeled on the download page. Do not instruct users to disable Windows security. A self-signed development certificate does not establish public trust.
 
-Obtain signing through a provider that verifies the publisher's identity and supports their country. As checked on November 6, 2026, Microsoft's individual Artifact Signing eligibility is limited to the US and Canada. For an individual in the Philippines, investigate qualifying open-source signing programs or an individual certificate provider and confirm eligibility directly. Do not change this project's licensing just to apply without the owner's decision.
+Obtain signing through a provider that verifies the publisher's identity and supports their location. Confirm current eligibility and requirements directly with the provider. Keep identity-verification records and signing-account details outside the repository.
 
 Configure the provider's protected certificate store, hardware token or supported cloud integration with electron-builder. Keep credentials outside Git. Use `npm run release:windows:signed`: packaging requires signing, and the staging script additionally requires Windows to report a valid signature with a timestamp. This signs via electron-builder's configured provider; it cannot issue a certificate or perform identity verification. Verify both the packaged application and installer before distribution. Signing proves publisher identity and detects tampering; it does not guarantee immediate SmartScreen reputation.
 

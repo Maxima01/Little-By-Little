@@ -27,3 +27,8 @@ public/downloads/
 *.pfx
 *.p12
 *.key
+
+# Feature: prevent private security reviews and deployment records from being re-added.
+/docs/security/
+/supabase/DEPLOYMENT.md
+/docs/private/

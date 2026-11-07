@@ -19,8 +19,8 @@ The application is organized by ownership:
 
 Feature folders keep UI in `components/` and reusable logic in `lib/`; workspace hooks live in `hooks/`. Keep native and web platform pairs in the same folder (for example, `RichEditor.tsx` and `RichEditor.web.tsx`) so Expo selects the implementation. Cross-feature imports should use the owning feature's logic instead of copying it.
 
-<!-- Feature: bounded web hosting and private cloud operations form separate security boundaries. -->
-`server/web.mjs` serves only production documents/assets with security headers, path containment and request limits. `scripts/prepare-web-build.mjs` prepares static-host documents. Optional cloud sync uses `cloudSync.ts` and authenticated read/save RPCs; `supabase/schema.sql` installs or upgrades private storage. See [SECURITY.md](../SECURITY.md) before deploying the database and matching clients. Public environment configuration is validated before bundling and at runtime.
+<!-- Feature: direct contributors to reusable hosting and optional cloud setup instructions. -->
+`server/web.mjs` serves the production website, and `scripts/prepare-web-build.mjs` prepares static-host documents. Optional cloud sync belongs to the workspace feature. See the [development guide](../docs/DEVELOPMENT.md) for hosting and the [cloud setup guide](../supabase/README.md) for configuring your own project.
 
 ## Save and recovery path
 
@@ -35,7 +35,7 @@ Feature folders keep UI in `components/` and reusable logic in `lib/`; workspace
 
 `fileTransfer.web.ts` handles browser and Electron downloads, print/PDF, and backup file picking. `fileTransfer.ts` supplies native explanations for those unsupported file actions; native editing and local saves still work. The built Electron renderer uses the same web implementation, with PDF sent through the narrow preload bridge.
 
-Run `npm run verify` for type checking, the Node tests in `tests/`, and a web build. Use `npm run test:pdf` when changing PDF output, and `npm run test:desktop -- --fast` when changing cross-screen desktop workflows. Desktop validation uses an isolated profile under `.local-checks/`; its screenshots, trace, exported files, and report stay there. See the root [README](../README.md#verification) for the full validation command and scope.
+Run `npm run verify` for type checking, the Node tests in `tests/`, and a web build. Use `npm run test:pdf` when changing PDF output, and `npm run test:desktop -- --fast` when changing cross-screen desktop workflows. Desktop validation uses an isolated profile under `.local-checks/`; its screenshots, trace, exported files, and report stay there. See the [development guide](../docs/DEVELOPMENT.md#verification) for validation commands and scope.
 
 Document new functions and features with a brief comment explaining their purpose. Put non-obvious data and recovery invariants beside the code that enforces them.
 
